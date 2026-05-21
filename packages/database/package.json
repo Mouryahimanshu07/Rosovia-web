@@ -1,0 +1,23 @@
+{
+  "name": "@rosovia/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --dts --format esm,cjs",
+    "typecheck": "tsc --noEmit",
+    "gen:types": "supabase gen types typescript --schema public > src/database.types.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

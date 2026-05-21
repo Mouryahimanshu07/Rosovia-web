@@ -1,0 +1,17 @@
+{
+  "extends": "../../packages/config/typescript/base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "incremental": false,
+    "jsx": "react-jsx",
+    "paths": {
+      "~/*": [
+        "./src/*"
+      ]
+    },
+    "ignoreDeprecations": "5.0"
+  },
+  "include": [
+    "src"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "extends": "../../packages/config/typescript/base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "incremental": false,
+    "paths": {
+      "~/*": [
+        "./src/*"
+      ]
+    },
+    "ignoreDeprecations": "5.0"
+  },
+  "include": [
+    "src"
+  ]
+}

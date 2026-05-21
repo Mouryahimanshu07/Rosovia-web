@@ -1,0 +1,38 @@
+{
+  "name": "@rosovia/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts src/client.ts src/server.ts --dts --format esm,cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rosovia/core": "workspace:*",
+    "@rosovia/integrations": "workspace:*",
+    "@supabase/supabase-js": "^2.42.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.mjs",
+      "default": "./dist/client.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "default": "./dist/server.js"
+    }
+  }
+}
