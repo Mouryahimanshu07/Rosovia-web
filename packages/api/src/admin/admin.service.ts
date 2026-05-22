@@ -13,6 +13,7 @@ import type {
   Profile,
   OrderWithDetails,
   Payment,
+  MarketplaceKpiSummary,
 } from '@rosovia/core';
 import { getProfileByAuthUserId } from '../profiles/profile.repository';
 import { createAdminAction } from '../reports/report.repository';
@@ -32,6 +33,7 @@ import {
   listAdminOrders,
   listAdminPayments,
   listAdminActionLogs,
+  getMarketplaceKpiSummary,
   type AdminCreatorRow,
   type AdminReviewRow,
   type AdminActionWithAdmin,
@@ -68,6 +70,13 @@ export async function getAdminDashboardOverview(
 ): Promise<AdminDashboardStats> {
   await resolveAdmin(supabase);
   return getAdminDashboardStats(supabase);
+}
+
+export async function getMarketplaceKpiOverview(
+  supabase: SupabaseClient
+): Promise<MarketplaceKpiSummary> {
+  await resolveAdmin(supabase);
+  return getMarketplaceKpiSummary(supabase);
 }
 
 // ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@ DECLARE
   v_admin_id uuid;
   v_profile public.profiles;
 BEGIN
-  v_admin_id := auth.uid();
+  v_admin_id := public.current_profile_id();
   IF NOT public.is_admin() THEN
     RAISE EXCEPTION 'Admin access required';
   END IF;
@@ -20,7 +20,7 @@ BEGIN
   END IF;
 
   IF p_status NOT IN ('active', 'suspended', 'deleted') THEN
-    RAISE EXCEPTION 'Invalid status';
+    RAISE EXCEPTION 'Invalid status: %', p_status;
   END IF;
 
   SELECT * INTO v_profile FROM public.profiles WHERE id = p_user_id FOR UPDATE;
@@ -40,7 +40,7 @@ BEGIN
     'user',
     p_user_id,
     p_note,
-    jsonb_build_object('previous_status', v_profile.status)
+    jsonb_build_object('new_status', p_status)
   );
 
   RETURN v_profile;
@@ -59,9 +59,13 @@ DECLARE
   v_listing public.listings;
   v_action_type text;
 BEGIN
-  v_admin_id := auth.uid();
+  v_admin_id := public.current_profile_id();
   IF NOT public.is_admin() THEN
     RAISE EXCEPTION 'Admin access required';
+  END IF;
+
+  IF p_status NOT IN ('draft', 'pending_review', 'approved', 'rejected', 'archived', 'suspended') THEN
+    RAISE EXCEPTION 'Invalid listing status: %', p_status;
   END IF;
 
   SELECT * INTO v_listing FROM public.listings WHERE id = p_listing_id FOR UPDATE;
@@ -70,14 +74,15 @@ BEGIN
   END IF;
 
   UPDATE public.listings
-  SET status = p_status::public.listing_status
+  SET status = p_status
   WHERE id = p_listing_id
   RETURNING * INTO v_listing;
 
   IF p_status = 'approved' THEN v_action_type := 'listing_approved';
   ELSIF p_status = 'rejected' THEN v_action_type := 'listing_rejected';
-  ELSIF p_status = 'suspended' OR p_status = 'archived' THEN v_action_type := 'listing_suspended';
-  ELSE v_action_type := 'listing_updated'; END IF;
+  ELSIF p_status = 'suspended' THEN v_action_type := 'listing_suspended';
+  ELSIF p_status = 'archived' THEN v_action_type := 'listing_suspended';
+  ELSE v_action_type := 'listing_approved'; END IF;
 
   INSERT INTO public.admin_actions (admin_id, action_type, target_type, target_id, note, metadata)
   VALUES (
@@ -86,7 +91,7 @@ BEGIN
     'listing',
     p_listing_id,
     p_note,
-    jsonb_build_object('status', p_status)
+    jsonb_build_object('new_status', p_status)
   );
 
   RETURN v_listing;
@@ -104,7 +109,7 @@ DECLARE
   v_admin_id uuid;
   v_review public.reviews;
 BEGIN
-  v_admin_id := auth.uid();
+  v_admin_id := public.current_profile_id();
   IF NOT public.is_admin() THEN
     RAISE EXCEPTION 'Admin access required';
   END IF;
@@ -148,9 +153,13 @@ DECLARE
   v_target_type text;
   v_log_target_id uuid;
 BEGIN
-  v_admin_id := auth.uid();
+  v_admin_id := public.current_profile_id();
   IF NOT public.is_admin() THEN
     RAISE EXCEPTION 'Admin access required';
+  END IF;
+
+  IF p_status NOT IN ('pending', 'reviewed', 'resolved', 'rejected') THEN
+    RAISE EXCEPTION 'Invalid report status: %', p_status;
   END IF;
 
   SELECT * INTO v_report FROM public.reports WHERE id = p_report_id FOR UPDATE;
@@ -180,13 +189,13 @@ BEGIN
     IF p_status = 'reviewed' THEN v_action_type := 'report_reviewed';
     ELSIF p_status = 'resolved' THEN v_action_type := 'report_resolved';
     ELSIF p_status = 'rejected' THEN v_action_type := 'report_rejected';
-    ELSE v_action_type := 'report_updated'; END IF;
+    ELSE v_action_type := 'report_reviewed'; END IF;
     v_target_type := 'report';
     v_log_target_id := p_report_id;
   END IF;
 
   UPDATE public.reports
-  SET status = p_status::public.report_status,
+  SET status = p_status,
       admin_note = p_resolution_note,
       reviewed_by = v_admin_id,
       reviewed_at = now()
@@ -219,9 +228,13 @@ DECLARE
   v_req public.verification_requests;
   v_action_type text;
 BEGIN
-  v_admin_id := auth.uid();
+  v_admin_id := public.current_profile_id();
   IF NOT public.is_admin() THEN
     RAISE EXCEPTION 'Admin access required';
+  END IF;
+
+  IF p_status NOT IN ('pending', 'approved', 'rejected') THEN
+    RAISE EXCEPTION 'Invalid verification status: %', p_status;
   END IF;
 
   SELECT * INTO v_req FROM public.verification_requests WHERE id = p_verification_request_id FOR UPDATE;
@@ -230,7 +243,7 @@ BEGIN
   END IF;
 
   UPDATE public.verification_requests
-  SET status = p_status::public.verification_request_status,
+  SET status = p_status,
       admin_note = p_note,
       reviewed_by = v_admin_id,
       reviewed_at = now()
@@ -238,24 +251,24 @@ BEGIN
   RETURNING * INTO v_req;
 
   IF p_status = 'approved' THEN
-    UPDATE public.creator_profiles 
-    SET is_verified = true, verification_level = v_req.request_type
+    UPDATE public.creator_profiles
+    SET is_verified = true, verification_level = v_req.requested_level
     WHERE id = v_req.creator_id;
-    v_action_type := 'verification_approved';
+    v_action_type := 'verification_reviewed';
   ELSIF p_status = 'rejected' THEN
-    v_action_type := 'verification_rejected';
+    v_action_type := 'verification_reviewed';
   ELSE
-    v_action_type := 'verification_updated';
+    v_action_type := 'verification_reviewed';
   END IF;
 
   INSERT INTO public.admin_actions (admin_id, action_type, target_type, target_id, note, metadata)
   VALUES (
     v_admin_id,
     v_action_type,
-    'creator',
-    v_req.creator_id,
+    'verification_request',
+    p_verification_request_id,
     p_note,
-    jsonb_build_object('verification_request_id', p_verification_request_id)
+    jsonb_build_object('new_status', p_status, 'creator_id', v_req.creator_id)
   );
 
   RETURN v_req;

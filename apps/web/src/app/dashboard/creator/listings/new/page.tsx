@@ -22,10 +22,13 @@ export default async function CreatorListingNewPage() {
   if (profile.status !== 'active') redirect('/login?error=account_suspended');
   if (profile.role !== 'creator') redirect('/dashboard/' + profile.role);
 
-  const creatorProfile = await getCurrentCreatorProfile(supabase);
-  if (!creatorProfile) redirect('/dashboard/creator/profile/new');
+  // Fetch creator profile + categories in parallel
+  const [creatorProfile, categories] = await Promise.all([
+    getCurrentCreatorProfile(supabase),
+    getActiveCategories(supabase),
+  ]);
 
-  const categories = await getActiveCategories(supabase);
+  if (!creatorProfile) redirect('/dashboard/creator/profile/new');
 
   return (
     <DashboardShell

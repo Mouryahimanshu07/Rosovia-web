@@ -7,13 +7,17 @@ import type { MediaAsset } from '@rosovia/core';
 
 interface ProfileImageUploadProps {
   currentUrl: string | null;
+  onUploaded?: (url: string) => void;
 }
 
-export function ProfileImageUpload({ currentUrl }: ProfileImageUploadProps) {
+export function ProfileImageUpload({ currentUrl, onUploaded }: ProfileImageUploadProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentUrl);
 
   const handleUploaded = (media: MediaAsset) => {
-    if (media.public_url) setPreviewUrl(media.public_url);
+    if (media.public_url) {
+      setPreviewUrl(media.public_url);
+      onUploaded?.(media.public_url);
+    }
   };
 
   return (

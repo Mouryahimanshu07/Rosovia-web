@@ -30,13 +30,16 @@ export default async function CreatorListingEditPage({ params }: Props) {
   const creatorProfile = await getCurrentCreatorProfile(supabase);
   if (!creatorProfile) redirect('/dashboard/creator/profile/new');
 
-  const listing = await getListingById(supabase, params.id);
+  // Fetch listing + categories + media all in parallel
+  const [listing, categories, existingMedia] = await Promise.all([
+    getListingById(supabase, params.id),
+    getActiveCategories(supabase),
+    listMediaByListingId(supabase, params.id),
+  ]);
+
   if (!listing) notFound();
   // Ensure creator owns this listing
   if (listing.creator_id !== creatorProfile.id) notFound();
-
-  const categories = await getActiveCategories(supabase);
-  const existingMedia = await listMediaByListingId(supabase, listing.id);
 
   return (
     <DashboardShell

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 // @ts-ignore: CSS imports may not have type declarations in this environment
 import './globals.css';
@@ -11,6 +11,20 @@ export const metadata: Metadata = {
   title: 'Rosovia - Verified Talent-Commerce Marketplace',
   description:
     'A verified talent-commerce marketplace for creators, artisans, coders, and skilled people.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Rosovia',
+  },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#1a1a2e',
 };
 
 export default function RootLayout({

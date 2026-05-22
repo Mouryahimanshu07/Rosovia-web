@@ -1,3 +1,5 @@
+'use client';
+
 interface SortSelectProps {
   options: { value: string; label: string }[];
   current: string;

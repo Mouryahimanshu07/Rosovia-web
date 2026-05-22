@@ -48,6 +48,21 @@ function loadRazorpayScript(): Promise<boolean> {
       resolve(true);
       return;
     }
+    
+    // Check if script is already in the document (injected by preloader)
+    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      const scriptEl = existing as HTMLScriptElement;
+      
+      // If window.Razorpay isn't ready yet, attach to the load events
+      const handleLoad = () => resolve(true);
+      const handleError = () => resolve(false);
+      
+      scriptEl.addEventListener('load', handleLoad);
+      scriptEl.addEventListener('error', handleError);
+      return;
+    }
+
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     script.async = true;

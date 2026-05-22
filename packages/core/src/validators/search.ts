@@ -55,7 +55,7 @@ export const listingSearchParamsSchema = z.object({
   onlineAvailable:      booleanParam,
   offlineAvailable:     booleanParam,
   sort: z
-    .enum(['newest', 'price_low', 'price_high'])
+    .enum(['newest', 'price_low', 'price_high', 'rating_high', 'relevance', 'trending'])
     .optional()
     .default('newest'),
   page: positiveIntParam,

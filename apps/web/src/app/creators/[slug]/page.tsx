@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import type { Metadata } from 'next';
+export const dynamic = 'force-dynamic';
 import { createWebServerClient } from '~/lib/supabase/server';
 import { getPublicCreatorProfileBySlug, listReviewsForPublicCreator } from '@rosovia/api';
 import { VerificationBadge } from '~/components/creator/verification-badge';
@@ -43,7 +44,7 @@ export default async function CreatorPublicProfilePage({ params }: Props) {
       <div className="flex items-start gap-6 mb-8">
         <div className="w-20 h-20 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0 relative">
           {profile.profile_image_url ? (
-            <Image src={profile.profile_image_url} alt={profile.display_name} fill unoptimized className="object-cover" />
+            <Image src={profile.profile_image_url} alt={profile.display_name} fill sizes="80px" className="object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-3xl font-semibold text-gray-400">
               {profile.display_name.charAt(0).toUpperCase()}

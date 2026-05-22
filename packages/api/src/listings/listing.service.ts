@@ -148,7 +148,9 @@ export async function updateCurrentCreatorListing(
   if (input.offlineAvailable !== undefined) safe.offline_available = input.offlineAvailable;
   if (Object.keys(metadata).length > 0) safe.metadata = metadata;
 
-  return updateListing(supabase, listingId, safe);
+  const listing = await updateListing(supabase, listingId, safe);
+  await cacheHelpers.del(`listing:detail:${listing.slug}`);
+  return listing;
 }
 
 export async function submitCurrentCreatorListingForReview(
@@ -162,7 +164,9 @@ export async function submitCurrentCreatorListingForReview(
     throw new Error(`Cannot submit a listing with status "${listing.status}" for review. Only drafts can be submitted.`);
   }
 
-  return updateListingStatus(supabase, listingId, 'pending_review');
+  const updatedListing = await updateListingStatus(supabase, listingId, 'pending_review');
+  await cacheHelpers.del(`listing:detail:${updatedListing.slug}`);
+  return updatedListing;
 }
 
 export async function archiveCurrentCreatorListing(
@@ -179,7 +183,9 @@ export async function archiveCurrentCreatorListing(
     throw new Error('Listing is already archived.');
   }
 
-  return updateListingStatus(supabase, listingId, 'archived');
+  const updatedListing = await updateListingStatus(supabase, listingId, 'archived');
+  await cacheHelpers.del(`listing:detail:${updatedListing.slug}`);
+  return updatedListing;
 }
 
 export async function restoreCurrentCreatorListingToDraft(
@@ -193,18 +199,51 @@ export async function restoreCurrentCreatorListingToDraft(
     throw new Error(`Cannot restore listing with status "${listing.status}" to draft.`);
   }
 
-  return updateListingStatus(supabase, listingId, 'draft');
+  const updatedListing = await updateListingStatus(supabase, listingId, 'draft');
+  await cacheHelpers.del(`listing:detail:${updatedListing.slug}`);
+  return updatedListing;
 }
+
+import { cacheHelpers } from '@rosovia/integrations';
 
 export async function getPublicListingBySlug(
   supabase: SupabaseClient,
   slug: string
 ): Promise<ListingWithDetails | null> {
-  const listing = await getListingBySlug(supabase, slug);
-  if (!listing) return null;
-  if (listing.status !== 'approved') return null;
-  return listing;
+  const cacheKey = `listing:detail:${slug}`;
+
+  // 1. Fetch cache
+  const cached = await cacheHelpers.get(cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      return parsed as ListingWithDetails;
+    } catch {
+      // ignore JSON parse error
+    }
+  }
+
+  // 2. Lock to prevent stampede
+  const acquired = await cacheHelpers.acquireLock(cacheKey, 5000);
+  if (acquired) {
+    try {
+      const listing = await getListingBySlug(supabase, slug);
+      if (!listing) return null;
+      if (listing.status !== 'approved') return null;
+
+      // 3. Write cache
+      await cacheHelpers.set(cacheKey, JSON.stringify(listing), 900); // 15 min TTL
+      return listing;
+    } finally {
+      await cacheHelpers.releaseLock(cacheKey);
+    }
+  } else {
+    // Retry fetch after small delay
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return getPublicListingBySlug(supabase, slug);
+  }
 }
+
 
 export async function listApprovedPublicListings(
   supabase: SupabaseClient,

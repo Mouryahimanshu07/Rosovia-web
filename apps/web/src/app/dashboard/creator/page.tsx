@@ -56,6 +56,13 @@ const creatorActions = [
     icon: '⭐',
     primary: false,
   },
+  {
+    title: 'Payouts & Earnings',
+    description: 'Track your earnings, pending settlements, and payout history.',
+    href: '/dashboard/creator/payouts',
+    icon: '💰',
+    primary: false,
+  },
 ];
 
 export default async function CreatorDashboardPage() {

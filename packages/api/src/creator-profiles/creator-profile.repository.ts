@@ -136,6 +136,7 @@ export async function updateCreatorProfile(
 
 /**
  * Lists public (non-deleted) creator profiles, joined with category name.
+ * B1 fix: Inner-joins through profiles to exclude suspended creator accounts.
  */
 export async function listPublicCreatorProfiles(
   supabase: SupabaseClient,
@@ -148,9 +149,13 @@ export async function listPublicCreatorProfiles(
     .from('creator_profiles')
     .select(`
       *,
-      categories ( name, slug )
+      categories ( name, slug ),
+      profiles!inner ( status, deleted_at )
     `)
     .is('deleted_at', null)
+    // B1 fix: only surface creators whose underlying account is active
+    .eq('profiles.status', 'active')
+    .is('profiles.deleted_at', null)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -165,3 +170,4 @@ export async function listPublicCreatorProfiles(
     };
   });
 }
+

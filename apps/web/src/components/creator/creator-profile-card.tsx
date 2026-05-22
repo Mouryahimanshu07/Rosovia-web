@@ -24,7 +24,7 @@ export function CreatorProfileCard({ profile }: CreatorProfileCardProps) {
               src={profile.profile_image_url}
               alt={profile.display_name}
               fill
-              unoptimized
+              sizes="56px"
               className="object-cover"
             />
           ) : (

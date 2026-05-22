@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+export const dynamic = 'force-dynamic';
 // sort-select is a client component to handle onChange
 import { createWebServerClient } from '~/lib/supabase/server';
 import { getPublicCategoryDetailPageData } from '@rosovia/api';
@@ -10,6 +11,7 @@ import { SearchBar } from '~/components/search/search-bar';
 import { FilterPanel } from '~/components/search/filter-panel';
 import { Pagination } from '~/components/search/pagination';
 import { ActiveFilters } from '~/components/search/active-filters';
+import { SortSelect } from '~/components/search/sort-select';
 import { listActiveCategories } from '@rosovia/api';
 
 interface CategoryDetailPageProps {
@@ -115,21 +117,10 @@ export default async function CategoryDetailPage({
                 {LISTING_FILTER_KEYS.filter((k) => k !== 'sort' && sp[k]).map((k) => (
                   <input key={k} type="hidden" name={k} value={sp[k] as string} />
                 ))}
-                <label htmlFor="cat-sort" className="text-sm text-gray-500">Sort:</label>
-                <select
-                  id="cat-sort"
-                  name="sort"
-                  defaultValue={sort}
-                  onChange={(e) => { const f = e.currentTarget.closest('form'); if (f) f.requestSubmit(); }}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                >
-                  {SORT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-                <noscript>
-                  <button type="submit" className="text-sm text-indigo-600">Apply</button>
-                </noscript>
+                <SortSelect
+                  options={SORT_OPTIONS}
+                  current={sort}
+                />
               </form>
             </div>
 

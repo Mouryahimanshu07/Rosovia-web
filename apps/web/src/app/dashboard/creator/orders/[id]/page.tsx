@@ -7,6 +7,7 @@ import {
   listOrderStatusHistory,
   getCreatorProfileByUserId,
   getPaymentByOrderId,
+  getDeliveryDetail,
 } from '@rosovia/api';
 import { DashboardShell } from '@rosovia/ui';
 import { OrderStatusBadge } from '~/components/order/order-status-badge';
@@ -14,6 +15,9 @@ import { PaymentStatusBadge } from '~/components/order/payment-status-badge';
 import { OrderActions } from '~/components/order/order-actions';
 import { OrderStatusHistoryList } from '~/components/order/order-status-history';
 import { PaymentStatusCard } from '~/components/payment/payment-status-card';
+import { MilestoneTracker } from '~/components/order/milestone-tracker';
+import { FulfillmentDetailsCard } from '~/components/order/fulfillment-details-card';
+import { MessageOrderPartyButton } from '~/components/order/message-order-party-button';
 
 interface Props {
   params: { id: string };
@@ -55,9 +59,10 @@ export default async function CreatorOrderDetailPage({ params }: Props) {
   // Creator can only see their assigned orders on this route
   if (order.creator_id !== creatorProfile.id) notFound();
 
-  const [history, payment] = await Promise.all([
+  const [history, payment, delivery] = await Promise.all([
     listOrderStatusHistory(supabase, order.id),
     getPaymentByOrderId(supabase, order.id),
+    getDeliveryDetail(supabase, order.id).catch(() => null),
   ]);
 
   const sourceLabel = order.listing_id
@@ -77,6 +82,9 @@ export default async function CreatorOrderDetailPage({ params }: Props) {
         >
           ← Back to Creator Orders
         </a>
+
+        {/* Milestone tracker */}
+        <MilestoneTracker order={order as any} role="creator" />
 
         {/* Order overview card */}
         <div className="rounded-xl border border-gray-200 bg-white p-6">
@@ -117,14 +125,31 @@ export default async function CreatorOrderDetailPage({ params }: Props) {
             </div>
           )}
 
-          {/* Creator Actions */}
-          <OrderActions
-            orderId={order.id}
-            orderStatus={order.order_status}
-            paymentStatus={order.payment_status}
-            viewAs="creator"
-          />
+          {/* Creator Actions + Message Buyer */}
+          <div className="flex flex-wrap items-center gap-3">
+            <OrderActions
+              orderId={order.id}
+              orderStatus={order.order_status}
+              paymentStatus={order.payment_status}
+              viewAs="creator"
+            />
+            {/* Contextual chat shortcut — creator ID is this creator, buyer is the other party */}
+            <MessageOrderPartyButton
+              creatorId={creatorProfile.id}
+              orderId={order.id}
+              viewAs="creator"
+            />
+          </div>
         </div>
+
+        {/* Fulfillment & Delivery Details — shown when delivery record exists */}
+        {delivery && (
+          <FulfillmentDetailsCard
+            delivery={delivery}
+            viewAs="creator"
+            orderStatus={order.order_status}
+          />
+        )}
 
         {/* Payment status — read only for creator */}
         <div className="rounded-xl border border-gray-200 bg-white p-6">

@@ -9,15 +9,13 @@ import { razorpayWebhookEventSchema } from '@rosovia/core';
 import { createRazorpayOrder, getRazorpayKeyId } from '@rosovia/integrations';
 import { verifyRazorpayWebhookSignature, getRazorpayWebhookSecret } from '@rosovia/integrations';
 import { getProfileByAuthUserId } from '../profiles/profile.repository';
-import { updateOrder, createOrderStatusHistory } from '../orders/order.repository';
+import { updateOrder } from '../orders/order.repository';
 import {
   getPaymentById,
   getPaymentByOrderId,
   getPaymentByProviderOrderId,
-  getPaymentByProviderPaymentId,
   createPayment,
   updatePayment,
-  markPaymentWebhookReceived,
   listPaymentsForOrder,
   markRazorpayCapturedAtomic,
   markRazorpayFailedAtomic,
@@ -132,37 +130,15 @@ export async function createPaymentForCurrentBuyerOrder(
     },
   });
 
-  // Create or update payment record
-  let payment: Payment;
-
-  if (existingPayment && existingPayment.status === 'failed') {
-    // Retry: update the existing failed payment with new Razorpay order
-    payment = await updatePayment(supabase, existingPayment.id, {
-      status: 'pending',
-      provider_payment_id: null,
-      webhook_received: false,
-      webhook_event_id: null,
-      raw_payload: null,
-    });
-    // Update provider_order_id: need a separate update since it's not in the partial type
-    const { data: updated, error: updateErr } = await supabase
-      .from('payments')
-      .update({ provider_order_id: razorpayOrder.id, status: 'pending' })
-      .eq('id', existingPayment.id)
-      .select('*')
-      .single();
-    if (!updateErr && updated) payment = updated as Payment;
-  } else {
-    // Create fresh payment record
-    payment = await createPayment(supabase, {
-      order_id: order.id,
-      provider: 'razorpay',
-      provider_order_id: razorpayOrder.id,
-      amount: order.amount,
-      currency: order.currency,
-      status: 'pending',
-    });
-  }
+  // Create fresh payment record
+  const payment = await createPayment(supabase, {
+    order_id: order.id,
+    provider: 'razorpay',
+    provider_order_id: razorpayOrder.id,
+    amount: order.amount,
+    currency: order.currency,
+    status: 'pending',
+  });
 
   // Update order payment_status to pending
   await updateOrder(supabase, order.id, { payment_status: 'pending' });
@@ -263,72 +239,53 @@ export async function handleRazorpayWebhook(
   // payment.captured — mark as paid
   // ---------------------------------------------------------------------------
   if (eventType === 'payment.captured') {
-    // Verify amount matches (prevent amount tampering)
+    // Guard: entity status must be 'captured'
+    if (paymentEntity.status !== 'captured') {
+      return { processed: false, duplicate: false, message: 'Payment event is not captured' };
+    }
+
+    // Guard: currency must match
+    if (paymentEntity.currency !== existingPayment.currency) {
+      return { processed: false, duplicate: false, message: 'Currency mismatch' };
+    }
+
+    // Guard: provider order must match
+    if (paymentEntity.order_id !== existingPayment.provider_order_id) {
+      return { processed: false, duplicate: false, message: 'Provider order mismatch' };
+    }
+
+    // Guard: verify amount matches (prevent amount tampering)
     const expectedPaise = Math.round(existingPayment.amount * 100);
     if (paymentEntity.amount !== expectedPaise) {
       console.error(
         `Webhook amount mismatch: expected ${expectedPaise} paise, got ${paymentEntity.amount}`
       );
-      // Do not mark as paid if amounts don't match
       return { processed: false, duplicate: false, message: 'Amount mismatch — not marking paid' };
     }
-    if (paymentEntity.status !== 'captured') {
-  return {
-    processed: false,
-    duplicate: false,
-    message: 'Payment event is not captured'
-  };
-}
 
-if (paymentEntity.currency !== existingPayment.currency) {
-  return {
-    processed: false,
-    duplicate: false,
-    message: 'Currency mismatch'
-  };
-}
-
-if (paymentEntity.order_id !== existingPayment.provider_order_id) {
-  return {
-    processed: false,
-    duplicate: false,
-    message: 'Provider order mismatch'
-  };
-}
-
-    // // Update payment record
-    // await markPaymentWebhookReceived(adminSupabase, {
-    //   paymentId: existingPayment.id,
-    //   status: 'paid',
-    //   providerPaymentId,
-    //   webhookEventId,
-    //   rawPayload,
-    // });
-
-    // // Update order: payment_status = paid, order_status = paid
-    // const previousStatus = await getOrderStatus(adminSupabase, existingPayment.order_id);
-    // await updateOrder(adminSupabase, existingPayment.order_id, {
-    //   payment_status: 'paid',
-    //   order_status: 'paid',
-    // });
-
-    // // Record status history (changed_by = null for webhook/system actor)
-    // await insertOrderStatusHistoryWebhook(
-    //   adminSupabase,
-    //   existingPayment.order_id,
-    //   previousStatus,
-    //   'paid',
-    //   'Payment captured by Razorpay'
-    // );
-
+    // Atomically mark the payment as paid and transition the order status
     await markRazorpayCapturedAtomic(adminSupabase, {
       eventId: webhookEventId,
-  providerOrderId,
-  providerPaymentId,
-  amount: paymentEntity.amount,
-  currency: paymentEntity.currency,
-  payload: rawPayload,
-});
+      providerOrderId,
+      providerPaymentId,
+      amount: paymentEntity.amount,
+      currency: paymentEntity.currency,
+      payload: rawPayload,
+    });
+
+    // Auto-create the creator payout row for this order.
+    // Non-fatal: a payout creation failure must not cause a 500 that triggers
+    // Razorpay retries and double-processes the payment.
+    try {
+      await (adminSupabase as any).rpc('create_creator_payout_for_order', {
+        p_order_id: existingPayment.order_id,
+      });
+    } catch (payoutErr) {
+      console.error(
+        'Webhook: failed to create creator payout (non-fatal):',
+        payoutErr instanceof Error ? payoutErr.message : payoutErr
+      );
+    }
 
     return { processed: true, duplicate: false, message: 'Payment marked as paid' };
   }
@@ -337,30 +294,23 @@ if (paymentEntity.order_id !== existingPayment.provider_order_id) {
   // payment.failed — mark as failed
   // ---------------------------------------------------------------------------
   if (eventType === 'payment.failed') {
-    // await markPaymentWebhookReceived(adminSupabase, {
-    //   paymentId: existingPayment.id,
-    //   status: 'failed',
-    //   providerPaymentId,
-    //   webhookEventId,
-    //   rawPayload,
-    // });
+    // Guard: entity status must be 'failed' — check BEFORE writing to the DB
+    if (paymentEntity.status !== 'failed') {
+      return { processed: false, duplicate: false, message: 'Payment event is not failed' };
+    }
+
+    // Atomically mark the payment as failed
     await markRazorpayFailedAtomic(adminSupabase, {
-  eventId: webhookEventId,
-  providerOrderId,
-  providerPaymentId,
-  amount: paymentEntity.amount,
-  currency: paymentEntity.currency,
-  payload: rawPayload,
-});
-if (paymentEntity.status !== 'failed') {
-  return {
-    processed: false,
-    duplicate: false,
-    message: 'Payment event is not failed'
-  };
-}
+      eventId: webhookEventId,
+      providerOrderId,
+      providerPaymentId,
+      amount: paymentEntity.amount,
+      currency: paymentEntity.currency,
+      payload: rawPayload,
+    });
 
     // Update order payment_status = failed, keep order_status = payment_pending
+    // (buyer can retry payment)
     await updateOrder(adminSupabase, existingPayment.order_id, {
       payment_status: 'failed',
     });
@@ -369,47 +319,6 @@ if (paymentEntity.status !== 'failed') {
   }
 
   return { processed: false, duplicate: false, message: 'Unhandled event type' };
-}
-
-// ---------------------------------------------------------------------------
-// Internal: get order status for history recording
-// ---------------------------------------------------------------------------
-
-async function getOrderStatus(
-  supabase: SupabaseClient,
-  orderId: string
-): Promise<string> {
-  const { data } = await supabase
-    .from('orders')
-    .select('order_status')
-    .eq('id', orderId)
-    .single();
-  return (data as { order_status: string } | null)?.order_status ?? 'payment_pending';
-}
-
-// ---------------------------------------------------------------------------
-// Internal: insert order status history for webhook events (changed_by = null)
-// ---------------------------------------------------------------------------
-
-async function insertOrderStatusHistoryWebhook(
-  supabase: SupabaseClient,
-  orderId: string,
-  oldStatus: string,
-  newStatus: string,
-  note: string
-) {
-  try {
-    await supabase.from('order_status_history').insert({
-      order_id: orderId,
-      old_status: oldStatus,
-      new_status: newStatus,
-      changed_by: null,
-      note,
-    });
-  } catch (err) {
-    // Non-fatal: history insert failure should not fail the webhook
-    console.error('Warning: order_status_history insert failed:', err);
-  }
 }
 
 // ---------------------------------------------------------------------------

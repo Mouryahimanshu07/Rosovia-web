@@ -55,6 +55,7 @@ export interface Order {
   order_status: OrderStatus;
   payment_status: PaymentStatus;
   delivery_status: string | null;
+  metadata?: Record<string, any> | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

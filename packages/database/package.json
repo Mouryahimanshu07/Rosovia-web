@@ -18,6 +18,8 @@
     "gen:types": "supabase gen types typescript --schema public > src/database.types.ts"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.42.0",
+    "pg": "^8.21.0",
     "typescript": "^5.4.5"
   }
 }

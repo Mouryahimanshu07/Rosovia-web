@@ -11,6 +11,7 @@ import type {
   AdminDashboardStats,
   AdminListParams,
   AdminCategoryInput,
+  MarketplaceKpiSummary,
 } from '@rosovia/core';
 
 const PAGE_SIZE = 20;
@@ -63,6 +64,35 @@ export async function getAdminDashboardStats(
     paid_orders: paid_orders ?? 0,
     total_payments: total_payments ?? 0,
     hidden_reviews: hidden_reviews ?? 0,
+  };
+}
+
+export async function getMarketplaceKpiSummary(
+  supabase: SupabaseClient
+): Promise<MarketplaceKpiSummary> {
+  const { data, error } = await supabase.rpc('get_marketplace_kpi_summary_atomic');
+  if (error) throw new Error(`Failed to fetch marketplace KPIs: ${error.message}`);
+
+  const row = data?.[0] || {
+    gmv_30_days: 0,
+    take_rate_30_days: 0,
+    total_orders_completed_30_days: 0,
+    aov_30_days: 0,
+    repeat_purchase_rate_90_days: 0,
+    inquiry_to_order_conversion_rate_pct: 0,
+    refund_rate_pct: 0,
+    dispute_rate_pct: 0,
+  };
+
+  return {
+    gmv_30_days: Number(row.gmv_30_days || 0),
+    take_rate_30_days: Number(row.take_rate_30_days || 0),
+    total_orders_completed_30_days: Number(row.total_orders_completed_30_days || 0),
+    aov_30_days: Number(row.aov_30_days || 0),
+    repeat_purchase_rate_90_days: Number(row.repeat_purchase_rate_90_days || 0),
+    inquiry_to_order_conversion_rate_pct: Number(row.inquiry_to_order_conversion_rate_pct || 0),
+    refund_rate_pct: Number(row.refund_rate_pct || 0),
+    dispute_rate_pct: Number(row.dispute_rate_pct || 0),
   };
 }
 

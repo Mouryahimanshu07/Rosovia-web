@@ -31,12 +31,14 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // getSession reads from cookie — no network call, fast for middleware.
+  // getUser verifies the JWT against the Supabase auth server — required for
+  // server-side auth checks. getSession() only reads the cookie and trusts the
+  // JWT payload without verification, making it vulnerable to replay attacks.
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirected_from', request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);

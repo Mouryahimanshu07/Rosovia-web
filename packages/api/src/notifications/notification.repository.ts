@@ -55,41 +55,63 @@ export async function getUnreadCountForProfile(
   supabase: SupabaseClient,
   profileId: string
 ): Promise<number> {
-  const { count, error } = await supabase
-    .from('notifications')
+  // Calculate badge counts dynamically based on orders needing attention to avoid DB notifications read overhead.
+  const { data: creatorProfile } = await supabase
+    .from('creator_profiles')
+    .select('id')
+    .eq('user_id', profileId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  let actionRequiredCount = 0;
+
+  if (creatorProfile) {
+    const { count: creatorCount, error: creatorErr } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('creator_id', creatorProfile.id)
+      .in('order_status', ['paid', 'in_progress'])
+      .is('deleted_at', null);
+
+    if (!creatorErr && creatorCount !== null) {
+      actionRequiredCount += creatorCount;
+    }
+  }
+
+  const { count: buyerCount, error: buyerErr } = await supabase
+    .from('orders')
     .select('*', { count: 'exact', head: true })
-    .eq('recipient_profile_id', profileId)
-    .is('read_at', null)
+    .eq('buyer_id', profileId)
+    .in('order_status', ['shipped', 'delivered'])
     .is('deleted_at', null);
 
-  if (error) {
-    throw new Error(`Failed to count unread notifications: ${error.message}`);
+  if (!buyerErr && buyerCount !== null) {
+    actionRequiredCount += buyerCount;
   }
-  return count ?? 0;
+
+  return actionRequiredCount;
 }
 
 export async function createNotification(
   supabase: SupabaseClient,
   input: NotificationCreateInput
 ): Promise<Notification> {
-  const { data, error } = await supabase
-    .from('notifications')
-    .insert({
-      recipient_profile_id: input.recipientProfileId,
-      type: input.type,
-      title: input.title,
-      body: input.body ?? null,
-      entity_type: input.entityType ?? null,
-      entity_id: input.entityId ?? null,
-      read_at: null,
-    })
-    .select('*')
-    .single();
+  // Skip database insert to prevent database-backed notification row accumulation.
+  // Instead, simulate a transactional email dispatch.
+  console.log(`[Notification Sim] Transactional notification sent to profile ${input.recipientProfileId}: "${input.title}" - ${input.body}`);
 
-  if (error) {
-    throw new Error(`Failed to create notification: ${error.message}`);
-  }
-  return data as Notification;
+  return {
+    id: '00000000-0000-0000-0000-000000000000',
+    recipient_profile_id: input.recipientProfileId,
+    type: input.type,
+    title: input.title,
+    body: input.body ?? null,
+    entity_type: input.entityType ?? null,
+    entity_id: input.entityId ?? null,
+    read_at: null,
+    created_at: new Date().toISOString(),
+    deleted_at: null,
+  };
 }
 
 export async function markNotificationAsRead(

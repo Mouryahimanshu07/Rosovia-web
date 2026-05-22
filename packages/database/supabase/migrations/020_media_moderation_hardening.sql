@@ -16,6 +16,8 @@ alter table public.media_assets
 
 drop policy if exists "media_assets: public can read public ready" on public.media_assets;
 
+drop policy if exists "media_assets: public can read approved public media" on public.media_assets;
+
 create policy "media_assets: public can read approved public media"
   on public.media_assets
   for select

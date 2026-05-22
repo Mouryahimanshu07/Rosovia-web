@@ -10,8 +10,6 @@ const NAV_LINKS = [
   { href: '/dashboard/admin/creators', label: 'Creators', icon: '🎨' },
   { href: '/dashboard/admin/categories', label: 'Categories', icon: '🗂️' },
   { href: '/dashboard/admin/listings', label: 'Listings', icon: '📋' },
-  { href: '/dashboard/admin/verification', label: 'Verification', icon: '✅' },
-  { href: '/dashboard/admin/reports', label: 'Reports', icon: '🚩' },
   { href: '/dashboard/admin/reviews', label: 'Reviews', icon: '⭐' },
   { href: '/dashboard/admin/orders', label: 'Orders', icon: '📦' },
   { href: '/dashboard/admin/payments', label: 'Payments', icon: '💳' },

@@ -14,6 +14,7 @@ import {
 } from '@rosovia/core';
 import { createCreatorProfileAction, updateCreatorProfileAction } from '~/app/actions/creator-profile';
 import { Button, Input } from '@rosovia/ui';
+import { ProfileImageUpload } from '~/components/media/profile-image-upload';
 
 interface CreatorProfileFormProps {
   mode: 'create' | 'edit';
@@ -60,6 +61,7 @@ export function CreatorProfileForm({ mode, categories, existingProfile }: Creato
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreatorProfileFormInput>({
     resolver: zodResolver(creatorProfileFormSchema),
@@ -166,8 +168,14 @@ export function CreatorProfileForm({ mode, categories, existingProfile }: Creato
         </Field>
       </div>
 
-      <Field label="Profile Image URL" hint="Direct link to your photo (upload coming in a future module)" error={errors.profileImageUrl?.message}>
-        <Input id="profileImageUrl" type="url" placeholder="https://..." {...register('profileImageUrl')} />
+      <Field label="Profile Image" error={errors.profileImageUrl?.message}>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <ProfileImageUpload 
+            currentUrl={existingProfile?.profile_image_url ?? null}
+            onUploaded={(url) => setValue('profileImageUrl', url, { shouldValidate: true, shouldDirty: true })}
+          />
+        </div>
+        <input type="hidden" {...register('profileImageUrl')} />
       </Field>
 
       <Field label="Intro Video URL" hint="YouTube or Vimeo link to a short introduction video" error={errors.introVideoUrl?.message}>

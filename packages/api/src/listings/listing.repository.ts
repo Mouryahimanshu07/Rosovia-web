@@ -77,15 +77,20 @@ export async function listPublicListings(
 
   const { data, error } = await supabase
     .from('listings')
-    .select('*, categories ( name ), creator_profiles ( display_name, slug )')
+    .select('*, categories ( name ), creator_profiles!inner ( display_name, slug, deleted_at, profiles!inner(status, deleted_at) )')
     .eq('status', 'approved')
     .is('deleted_at', null)
+    // B1 fix: ensure creator is not deleted and their account is active
+    .is('creator_profiles.deleted_at', null)
+    .eq('creator_profiles.profiles.status', 'active')
+    .is('creator_profiles.profiles.deleted_at', null)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (error) throw new Error(`Failed to list public listings: ${error.message}`);
   return (data ?? []).map((r) => flattenListing(r as Parameters<typeof flattenListing>[0]));
 }
+
 
 export async function listCurrentCreatorListings(
   supabase: SupabaseClient,

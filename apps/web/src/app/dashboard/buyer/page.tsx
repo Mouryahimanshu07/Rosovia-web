@@ -56,6 +56,13 @@ const buyerActions = [
     icon: '🛡️',
     primary: false,
   },
+  {
+    title: 'Refund Requests',
+    description: 'Track and manage refund requests for your paid orders.',
+    href: '/dashboard/buyer/refunds',
+    icon: '💸',
+    primary: false,
+  },
 ];
 
 export default async function BuyerDashboardPage() {

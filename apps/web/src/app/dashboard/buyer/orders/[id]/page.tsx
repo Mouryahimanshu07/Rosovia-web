@@ -7,6 +7,7 @@ import {
   listOrderStatusHistory,
   getPaymentByOrderId,
   getReviewByOrderId,
+  getDeliveryDetail,
 } from '@rosovia/api';
 import { DashboardShell } from '@rosovia/ui';
 import { OrderStatusBadge } from '~/components/order/order-status-badge';
@@ -14,9 +15,13 @@ import { PaymentStatusBadge } from '~/components/order/payment-status-badge';
 import { OrderActions } from '~/components/order/order-actions';
 import { OrderStatusHistoryList } from '~/components/order/order-status-history';
 import { PayNowButton } from '~/components/payment/pay-now-button';
+import { RazorpayPreloader } from '~/components/payment/razorpay-preloader';
 import { PaymentStatusCard } from '~/components/payment/payment-status-card';
 import { ReviewForm } from '~/components/review/review-form';
 import { ReviewCard } from '~/components/review/review-card';
+import { MilestoneTracker } from '~/components/order/milestone-tracker';
+import { FulfillmentDetailsCard } from '~/components/order/fulfillment-details-card';
+import { MessageOrderPartyButton } from '~/components/order/message-order-party-button';
 
 interface Props {
   params: { id: string };
@@ -53,10 +58,11 @@ export default async function BuyerOrderDetailPage({ params }: Props) {
   // Buyers can only see their own orders on this route
   if (order.buyer_id !== profile.id) notFound();
 
-  const [history, payment, existingReview] = await Promise.all([
+  const [history, payment, existingReview, delivery] = await Promise.all([
     listOrderStatusHistory(supabase, order.id),
     getPaymentByOrderId(supabase, order.id),
     getReviewByOrderId(supabase, order.id),
+    getDeliveryDetail(supabase, order.id).catch(() => null),
   ]);
 
   // Review eligibility
@@ -90,6 +96,9 @@ export default async function BuyerOrderDetailPage({ params }: Props) {
           ← Back to My Orders
         </a>
 
+        {/* Milestone tracker */}
+        <MilestoneTracker order={order as any} role="buyer" />
+
         {/* Order overview card */}
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
@@ -122,6 +131,7 @@ export default async function BuyerOrderDetailPage({ params }: Props) {
           {/* Pay Now — shown only when payable */}
           {isPayable && (
             <div className="mb-5">
+              <RazorpayPreloader />
               <PayNowButton orderId={order.id} amountDisplay={amountDisplay} />
               <p className="text-xs text-gray-400 mt-2">
                 Payment confirmation is handled securely via Razorpay webhook.
@@ -129,14 +139,33 @@ export default async function BuyerOrderDetailPage({ params }: Props) {
             </div>
           )}
 
-          {/* Order Actions (cancel, complete, dispute) */}
-          <OrderActions
-            orderId={order.id}
-            orderStatus={order.order_status}
-            paymentStatus={order.payment_status}
-            viewAs="buyer"
-          />
+          {/* Order Actions (cancel, ship, deliver, complete, dispute) */}
+          <div className="flex flex-wrap items-center gap-3">
+            <OrderActions
+              orderId={order.id}
+              orderStatus={order.order_status}
+              paymentStatus={order.payment_status}
+              viewAs="buyer"
+            />
+            {/* Contextual Chat shortcut */}
+            {order.creator_id && (
+              <MessageOrderPartyButton
+                creatorId={order.creator_id}
+                orderId={order.id}
+                viewAs="buyer"
+              />
+            )}
+          </div>
         </div>
+
+        {/* Fulfillment & Delivery Details — only shown when a delivery record exists */}
+        {delivery && (
+          <FulfillmentDetailsCard
+            delivery={delivery}
+            viewAs="buyer"
+            orderStatus={order.order_status}
+          />
+        )}
 
         {/* Payment status card */}
         <div className="rounded-xl border border-gray-200 bg-white p-6">

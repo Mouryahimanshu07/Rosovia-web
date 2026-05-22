@@ -1,127 +1,229 @@
 # Rosovia Deployment Checklist: Vercel & Supabase
 
-This guide provides step-by-step instructions for deploying the Rosovia platform, connecting it to Supabase, and configuring Vercel.
+This guide provides step-by-step instructions for deploying the Rosovia platform to Vercel, connected to Supabase and Cloudflare R2.
 
-## 1. Local Setup Steps
+---
 
-1. Clone the repository to your local machine.
-2. Ensure you have the required Node.js and pnpm versions installed.
-3. Run `pnpm install` at the root of the workspace.
-4. Copy `packages/database/.env.example` to `packages/database/.env` and `.env.example` to `.env.local` at the root of the project.
+## 1. Prerequisites
 
-## 2. Required Versions
+- **Node.js** ≥ 20.x
+- **pnpm** ≥ 9.0.0 (`corepack enable && corepack prepare pnpm@9.0.0 --activate`)
+- Supabase account and project created
+- Cloudflare R2 bucket created
+- Razorpay account configured
+- GitHub repository with the Rosovia codebase
 
-- **Node.js**: `v20.x` or higher
-- **pnpm**: `v9.0.0` or higher (run `corepack enable` and `corepack prepare pnpm@9.0.0 --activate` if needed).
+---
 
-## 3. Supabase Project Setup
+## 2. Supabase Project Setup
 
-1. Create a new project in the [Supabase Dashboard](https://database.new).
-2. Note your Project URL and Anon Key from **Project Settings > API**.
-3. Note your Service Role Key (Keep this secret!).
-4. Note your Database Password.
+1. Create a project at [database.new](https://database.new).
+2. From **Project Settings → API**, note:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **Anon Key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - **Service Role Key** → `SUPABASE_SERVICE_ROLE_KEY` (**keep secret**)
+3. From **Project Settings → Database**, note:
+   - **Connection string (pooler)** → `DATABASE_URL`
 
-## 4. Supabase Environment Variable List
+---
 
-Add the following to your `.env.local` (local) and Vercel Environment Variables (production):
+## 3. Apply All Migrations
+
+Link your local Supabase CLI to the remote project and push all 27 migrations in order:
+
+```bash
+# From project root
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+
+# Apply all migrations from 001 to 027
+supabase db push
+```
+
+> Alternatively, paste the SQL files into the Supabase SQL Editor in numeric order (001 → 027).
+
+### Verify Migrations
+
+In the Supabase Dashboard → Database → Tables, confirm these tables exist:
+
+`profiles`, `categories`, `creator_profiles`, `listings`, `media_assets`, `inquiries`, `custom_orders`, `orders`, `order_status_history`, `payments`, `reviews`, `verification_requests`, `reports`, `admin_actions`, `refund_requests`, `disputes`, `creator_payouts`, `messages`, `notifications`, `order_deliveries`
+
+---
+
+## 4. Seed Categories
+
+```bash
+# Local/dev only — drops and resets all data
+supabase db reset
+
+# Or run seed.sql in Supabase SQL Editor for production seed only
+# File: packages/database/supabase/seed.sql
+```
+
+---
+
+## 5. Generate TypeScript Database Types
+
+After migrations are applied, regenerate the TypeScript types and commit the result:
+
+```bash
+supabase gen types typescript --schema public \
+  > packages/database/src/database.types.ts
+```
+
+Commit the updated file so the build picks up current table types.
+
+---
+
+## 6. Auth Redirect URL Setup
+
+In Supabase → **Authentication → URL Configuration**:
+
+| Setting | Value |
+|---|---|
+| Site URL | `https://your-production-domain.com` |
+| Redirect URLs | `http://localhost:3000/auth/callback` (local), `https://your-production-domain.com/auth/callback` (prod) |
+
+---
+
+## 7. Cloudflare R2 Setup
+
+1. Create an R2 bucket in the Cloudflare Dashboard.
+2. Create an R2 API token with Object Read & Write permissions.
+3. Configure a custom domain or use the default `pub-xxx.r2.dev` public URL.
+4. Set CORS policy on the bucket to allow PUT requests from your domain:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://your-production-domain.com", "http://localhost:3000"],
+    "AllowedMethods": ["PUT", "GET"],
+    "AllowedHeaders": ["Content-Type", "Content-Length"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+---
+
+## 8. Razorpay Webhook Configuration
+
+In the Razorpay Dashboard → **Settings → Webhooks**:
+
+1. Add webhook endpoint: `https://your-production-domain.com/api/webhooks/razorpay`
+2. Enable events: `payment.captured`, `payment.failed`
+3. Copy the webhook secret → `RAZORPAY_WEBHOOK_SECRET`
+
+---
+
+## 9. Environment Variables Reference
+
+All required variables — see [docs/env.md](../env.md) for full documentation.
 
 ```env
-# Required for browser and server clients
-NEXT_PUBLIC_SUPABASE_URL=your-project-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+DATABASE_URL=
 
-# Required for admin bypass (Server only, DO NOT use NEXT_PUBLIC prefix)
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+# Cloudflare R2
+CLOUDFLARE_R2_ACCOUNT_ID=
+CLOUDFLARE_R2_ACCESS_KEY_ID=
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=
+CLOUDFLARE_R2_BUCKET_NAME=
+CLOUDFLARE_R2_PUBLIC_URL=
 
-# Required for migrations
-DATABASE_URL=postgres://postgres.[project-ref]:[db-password]@aws-0-[region].pooler.supabase.com:6543/postgres
+# Razorpay
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
+
+# Sentry (optional but recommended)
+NEXT_PUBLIC_SENTRY_DSN=
+SENTRY_DSN=
+SENTRY_AUTH_TOKEN=      # CI/CD secrets only
+SENTRY_ORG=
+SENTRY_PROJECT=
+
+# PostHog (optional but recommended)
+NEXT_PUBLIC_POSTHOG_KEY=
+NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
 ```
 
-## 5. Migration Apply Steps
+---
 
-To apply the database migrations to your Supabase project:
+## 10. Vercel Project Setup
 
-1. Link your local project to the Supabase project:
-   ```bash
-   cd packages/database
-   npx supabase link --project-ref <your-project-ref>
-   ```
-2. Push the migrations to the remote database:
-   ```bash
-   npx supabase db push
-   ```
-
-Alternatively, you can manually copy and execute the SQL files in `packages/database/supabase/migrations` sequentially (001 to 014) in the Supabase SQL Editor.
-
-## 6. Seed Apply Steps
-
-If you need to seed initial categories or test data:
-Run the seed file using the Supabase CLI or SQL Editor:
-```bash
-npx supabase db reset # (This drops data, only use for local/test)
-```
-Or execute `packages/database/supabase/seed.sql` in the SQL Editor.
-
-## 7. Auth Redirect URL Setup
-
-Go to **Authentication > URL Configuration** in Supabase and configure the Site URL and Redirect URIs.
-
-- **Local URL**: `http://localhost:3000`
-- **Vercel Preview URL**: `https://*vercel.app` (Enable wildcard previews if desired).
-- **Production URL**: `https://your-production-domain.com`
-
-Make sure to add `http://localhost:3000/auth/callback` (and the equivalent production callback) to your allowed redirect URIs.
-
-## 8. Vercel Setup Steps
-
-1. Push your code to GitHub.
-2. Import the project into Vercel.
-3. Configure the project settings as follows:
+1. Push code to GitHub.
+2. Import the project in [vercel.com/new](https://vercel.com/new).
+3. Configure:
    - **Framework Preset**: Next.js
-   - **Root Directory**: `apps/web` (or leave root if Vercel auto-detects Turbo, but usually `apps/web` is safer if the build command is configured correctly, however since it's a turborepo, leave Root Directory empty and let Vercel use Turborepo defaults).
+   - **Root Directory**: leave empty (Turborepo auto-detection)
    - **Install Command**: `pnpm install`
-   - **Build Command**: `pnpm run build` (This runs `turbo run build` from the root).
+   - **Build Command**: `pnpm run build`
    - **Output Directory**: `.next`
+4. Add all environment variables from step 9 in **Settings → Environment Variables** (Production + Preview).
 
-## 9. Vercel Environment Variables
+> ⚠️ Set `SUPABASE_SERVICE_ROLE_KEY`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` as **encrypted** Vercel secrets. Never add `SENTRY_AUTH_TOKEN` to environment variables — use Vercel's CI/CD integration secrets instead.
 
-In the Vercel dashboard, add all variables from step 4, plus any storage variables:
+---
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-DATABASE_URL=...
+## 11. Build Command Details
 
-# Storage (if using Cloudflare R2)
-CLOUDFLARE_R2_ACCOUNT_ID=...
-CLOUDFLARE_R2_ACCESS_KEY_ID=...
-CLOUDFLARE_R2_SECRET_ACCESS_KEY=...
-CLOUDFLARE_R2_BUCKET_NAME=...
-CLOUDFLARE_R2_PUBLIC_URL=...
-```
+The root `package.json` defines:
 
-## 10. Build Command
-
-The optimal build command is set in the root `package.json`:
 ```bash
-pnpm run build
+pnpm run build  →  turbo run build
 ```
-This leverages Turbo to build dependencies (`@rosovia/core`, `@rosovia/api`, etc.) in the correct order before building the Next.js app.
 
-## 11. Common Deployment Errors and Fixes
+Turborepo builds packages in dependency order:
+1. `@rosovia/core` (types, validators)
+2. `@rosovia/database` (DB types)
+3. `@rosovia/ui` (UI components)
+4. `@rosovia/api` (repositories, services)
+5. `web` (Next.js app)
 
-- **Type errors on build**: Vercel runs a strict production build. If it fails due to typecheck, run `pnpm typecheck` locally to find and fix the issue. (Our audit confirmed all types currently pass).
-- **Missing Env Vars**: Next.js will crash at runtime if server-side env vars like `SUPABASE_SERVICE_ROLE_KEY` are missing. Double-check the Vercel env settings.
-- **Turborepo cache misses**: Ensure the `turbo.json` outputs include `.next/**` and `!.next/cache/**`.
+---
 
-## 12. Final Production Checklist
+## 12. First Deployment Verification
 
-- [ ] Supabase Project Created.
-- [ ] Migrations pushed successfully.
-- [ ] Authentication Site URL and Redirect URIs configured in Supabase.
-- [ ] Vercel project connected to GitHub repository.
-- [ ] All environment variables added to Vercel (Production and Preview environments).
-- [ ] Domain mapped in Vercel settings.
-- [ ] First deployment triggered and successful.
-- [ ] Tested signup/login flow on the live domain.
+After your first deployment:
+
+- [ ] Visit `https://your-domain.com/api/health` → expect `{ "status": "ok" }`
+- [ ] Signup flow works end-to-end
+- [ ] Login and session persistence works
+- [ ] Explore page loads listings (after categories seeded + at least one listing approved)
+- [ ] Media upload works (profile image)
+- [ ] Razorpay checkout opens in test mode
+
+---
+
+## 13. Common Deployment Errors
+
+| Error | Cause | Fix |
+|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY not found` | Missing env var | Add to Vercel production env |
+| Type errors on build | Type mismatch after migration | Regenerate `database.types.ts` and commit |
+| `Edge runtime error` | Server-only import in edge middleware | Move import to server component |
+| `R2 presigned URL 403` | CORS policy missing or wrong origin | Update R2 CORS config |
+| `Webhook 400 Bad Request` | Signature mismatch | Verify `RAZORPAY_WEBHOOK_SECRET` matches Razorpay dashboard value |
+| Turborepo cache misses | `turbo.json` outputs not covering `.next` | Verify `.next/**` in `turbo.json` outputs |
+
+---
+
+## 14. Final Deployment Checklist
+
+- [ ] Supabase project created
+- [ ] All 27 migrations pushed
+- [ ] Auth Site URL and Redirect URIs configured
+- [ ] Seed categories applied
+- [ ] Admin account created (`role = admin`, `status = active`)
+- [ ] Cloudflare R2 bucket created and CORS configured
+- [ ] Razorpay webhook registered
+- [ ] All environment variables added to Vercel
+- [ ] Domain mapped in Vercel settings
+- [ ] First deployment triggered and successful
+- [ ] `/api/health` responds correctly
+- [ ] Signup/login tested on live domain
+- [ ] Database types committed and up to date

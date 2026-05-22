@@ -22,7 +22,7 @@ export interface PaginatedResult<T> {
 // Sort options
 // ---------------------------------------------------------------------------
 
-export type ListingSortOption = 'newest' | 'price_low' | 'price_high';
+export type ListingSortOption = 'newest' | 'price_low' | 'price_high' | 'rating_high' | 'relevance' | 'trending';
 export type CreatorSortOption = 'newest' | 'rating_high' | 'verified_first';
 
 // ---------------------------------------------------------------------------

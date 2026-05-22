@@ -25,6 +25,7 @@ export default async function BuyerOrdersPage() {
 
   const orders = await listBuyerOrdersForCurrentUser(supabase);
 
+
   return (
     <DashboardShell
       title="My Orders"

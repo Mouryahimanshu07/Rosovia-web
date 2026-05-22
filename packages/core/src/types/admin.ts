@@ -27,6 +27,17 @@ export interface AdminDashboardStats {
   hidden_reviews: number;
 }
 
+export interface MarketplaceKpiSummary {
+  gmv_30_days: number;
+  take_rate_30_days: number;
+  total_orders_completed_30_days: number;
+  aov_30_days: number;
+  repeat_purchase_rate_90_days: number;
+  inquiry_to_order_conversion_rate_pct: number;
+  refund_rate_pct: number;
+  dispute_rate_pct: number;
+}
+
 // ---------------------------------------------------------------------------
 // Action types
 // ---------------------------------------------------------------------------

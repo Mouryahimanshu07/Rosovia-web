@@ -23,11 +23,14 @@ export default async function CreatorProfileNewPage() {
   if (profile.status !== 'active') redirect('/login?error=account_suspended');
   if (profile.role !== 'creator') redirect('/dashboard/' + profile.role);
 
-  // If already has a creator profile, redirect to edit
-  const existing = await getCurrentCreatorProfile(supabase);
-  if (existing) redirect('/dashboard/creator/profile/edit');
+  // Fetch existing profile check + categories in parallel
+  const [existing, categories] = await Promise.all([
+    getCurrentCreatorProfile(supabase),
+    getActiveCategories(supabase),
+  ]);
 
-  const categories = await getActiveCategories(supabase);
+  // If already has a creator profile, redirect to edit
+  if (existing) redirect('/dashboard/creator/profile/edit');
 
   return (
     <DashboardShell

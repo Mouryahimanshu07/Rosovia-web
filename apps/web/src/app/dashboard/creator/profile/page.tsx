@@ -51,7 +51,7 @@ export default async function CreatorProfileDashboardPage() {
         <div className="rounded-xl border border-gray-200 bg-white p-6 flex items-start gap-5">
           <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0 relative">
             {creatorProfile.profile_image_url ? (
-              <Image src={creatorProfile.profile_image_url} alt={creatorProfile.display_name} fill unoptimized className="object-cover" />
+              <Image src={creatorProfile.profile_image_url} alt={creatorProfile.display_name} fill sizes="64px" className="object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-400 text-2xl font-semibold">
                 {creatorProfile.display_name.charAt(0).toUpperCase()}

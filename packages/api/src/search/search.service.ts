@@ -4,7 +4,9 @@ import type {
   CreatorProfileWithCategory,
   DbCategory,
   PaginatedResult,
+  ListingSearchParams,
 } from '@rosovia/core';
+
 import {
   listingSearchParamsSchema,
   creatorSearchParamsSchema,
@@ -12,10 +14,12 @@ import {
 } from '@rosovia/core';
 import {
   searchApprovedListings,
+  searchListingsRanked,
   searchPublicCreators,
   listActiveCategories,
   getCategoryBySlug,
   getCategoryPageData,
+  type RankedSearchParams,
 } from './search.repository';
 import { listPublicListings } from '../listings/listing.repository';
 import { listPublicCreatorProfiles } from '../creator-profiles/creator-profile.repository';
@@ -119,4 +123,58 @@ export async function getPublicCategoryDetailPageData(
   );
 
   return { category, listings, creators };
+}
+
+// ---------------------------------------------------------------------------
+// getTrendingListings
+//
+// Returns the top trending listings globally using the blended ranking RPC.
+// Used for "Trending" sections on the explore page.
+// ---------------------------------------------------------------------------
+
+export async function getTrendingListings(
+  supabase: SupabaseClient,
+  options: {
+    category?: string;
+    limit?: number;
+    buyerCity?: string;
+    buyerState?: string;
+  } = {}
+): Promise<ListingWithDetails[]> {
+  const searchParams: RankedSearchParams = {
+    sort: 'trending' as ListingSearchParams['sort'],
+    category: options.category,
+    buyerCity: options.buyerCity,
+    buyerState: options.buyerState,
+    page: 1,
+  };
+  const result = await searchListingsRanked(supabase, searchParams);
+  return result.data.slice(0, options.limit ?? 12);
+}
+
+
+// ---------------------------------------------------------------------------
+// recordListingView
+//
+// B4: Persists a listing view event via the record_listing_event() RPC.
+// Must be called from a Next.js server action (not client-side) so the
+// service_role or authenticated context is available.
+// Fails silently — analytics should never block rendering.
+// ---------------------------------------------------------------------------
+
+export async function recordListingView(
+  supabase: SupabaseClient,
+  listingId: string,
+  sessionId?: string
+): Promise<void> {
+  try {
+    await supabase.rpc('record_listing_event', {
+      p_listing_id:  listingId,
+      p_event_type:  'view',
+      p_session_id:  sessionId ?? null,
+    });
+  } catch {
+    // Analytics must never throw — log and continue
+    console.warn('[analytics] Failed to record listing view:', listingId);
+  }
 }

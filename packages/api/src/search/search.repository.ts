@@ -11,6 +11,14 @@ import type {
 
 const PAGE_SIZE = 12;
 
+// Internal extension of ListingSearchParams for the ranked RPC.
+// buyerCity/buyerState are passed by the service layer from session context;
+// they are NOT exposed as URL query params.
+export interface RankedSearchParams extends ListingSearchParams {
+  buyerCity?: string;
+  buyerState?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -63,12 +71,26 @@ function buildPaginationMeta(
 
 // ---------------------------------------------------------------------------
 // searchApprovedListings
+//
+// Primary listing search using the Supabase PostgREST client.
+// Handles all sort modes except 'relevance' and 'trending', which are
+// delegated to searchListingsRanked() (the Postgres RPC with blended scoring).
 // ---------------------------------------------------------------------------
 
 export async function searchApprovedListings(
   supabase: SupabaseClient,
   params: ListingSearchParams
 ): Promise<PaginatedResult<ListingWithDetails>> {
+  // Delegate relevance + trending sorts to the ranked RPC — richer scoring
+  const sortValue = params.sort as string | undefined;
+  if (sortValue === 'relevance' || sortValue === 'trending') {
+    return searchListingsRanked(supabase, params);
+  }
+  // When a query is present, also use the ranked RPC for relevance scoring
+  if (params.q && params.q.trim().length > 0) {
+    return searchListingsRanked(supabase, { ...params, sort: 'relevance' as ListingSearchParams['sort'] });
+  }
+
   const page = params.page ?? 1;
   const offset = (page - 1) * PAGE_SIZE;
   // Fetch one extra row to detect hasNext without an expensive COUNT(*)
@@ -85,12 +107,6 @@ export async function searchApprovedListings(
     .is('creator_profiles.profiles.deleted_at', null);
 
   // Apply filters
-  if (params.q) {
-    const term = `%${params.q.trim().replace(/[%_]/g, '\\$&')}%`;
-    dataQuery = dataQuery.or(
-      `title.ilike.${term},description.ilike.${term},city.ilike.${term},state.ilike.${term}`
-    );
-  }
   if (params.category) {
     dataQuery = dataQuery.eq('category_id', params.category);
   }
@@ -118,13 +134,23 @@ export async function searchApprovedListings(
   if (params.offlineAvailable === true) {
     dataQuery = dataQuery.eq('offline_available', true);
   }
+  // B2 fix: verifiedOnly filter was accepted by Zod schema but never applied
+  if (params.verifiedOnly === true) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    dataQuery = (dataQuery as any).eq('creator_profiles.is_verified', true);
+  }
 
   // Sort
-  const sort = params.sort ?? 'newest';
+  const sort = params.sort as string | undefined;
   if (sort === 'price_low') {
     dataQuery = dataQuery.order('price', { ascending: true, nullsFirst: false });
   } else if (sort === 'price_high') {
     dataQuery = dataQuery.order('price', { ascending: false, nullsFirst: false });
+  } else if (sort === 'rating_high') {
+    // ST-2: rating_high sort for listings — sort by creator's rating_avg
+    dataQuery = dataQuery
+      .order('creator_profiles.rating_avg', { ascending: false })
+      .order('created_at', { ascending: false });
   } else {
     dataQuery = dataQuery.order('created_at', { ascending: false });
   }
@@ -139,6 +165,130 @@ export async function searchApprovedListings(
   // Trim to actual page size — extra row is only used for hasNext detection
   const pageRows = raw.slice(0, PAGE_SIZE);
 
+  const results = pageRows.map((r) =>
+    flattenListingRow(r as Parameters<typeof flattenListingRow>[0])
+  );
+
+  return {
+    data: results,
+    meta: buildPaginationMeta(page, PAGE_SIZE, raw.length),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// searchListingsRanked
+//
+// Calls the search_listings_ranked() Postgres RPC for blended scoring:
+//   - Full-text search via tsvector (stemmed, phrase-aware)
+//   - Trigram fuzzy fallback for typo tolerance
+//   - trending_score from listing_signals materialized view
+//   - Location-affinity and verified-creator boosts
+//
+// Used automatically when sort='relevance', sort='trending', or when a
+// query term is present (to ensure results are relevance-ranked).
+// ---------------------------------------------------------------------------
+
+export async function searchListingsRanked(
+  supabase: SupabaseClient,
+  params: RankedSearchParams
+): Promise<PaginatedResult<ListingWithDetails>> {
+  const page = params.page ?? 1;
+
+  const { data, error } = await supabase.rpc('search_listings_ranked', {
+    p_query:         params.q?.trim() || null,
+    p_category:      params.category ?? null,
+    p_listing_type:  params.listingType ?? null,
+    p_min_price:     params.minPrice ?? null,
+    p_max_price:     params.maxPrice ?? null,
+    p_city:          params.city?.trim() ?? null,
+    p_state:         params.state?.trim() ?? null,
+    p_buyer_city:    params.buyerCity?.trim() ?? null,
+    p_buyer_state:   params.buyerState?.trim() ?? null,
+    p_custom_order:  params.customOrderAvailable ?? null,
+    p_online:        params.onlineAvailable ?? null,
+    p_offline:       params.offlineAvailable ?? null,
+    p_verified_only: params.verifiedOnly ?? null,
+    p_sort:          (params.sort as string | undefined) ?? 'relevance',
+    p_page:          page,
+    p_page_size:     PAGE_SIZE,
+  });
+
+  if (error) {
+    // Graceful degradation: if the RPC is unavailable (e.g. migration not yet applied),
+    // fall back to the basic ILIKE search with relevance ordering disabled
+    console.warn('[search] RPC search_listings_ranked unavailable, falling back to ILIKE:', error.message);
+    return searchListingsFallback(supabase, params);
+  }
+
+  const raw = (data ?? []) as ListingWithDetails[];
+  const hasNext = raw.length > PAGE_SIZE;
+  const pageRows = raw.slice(0, PAGE_SIZE);
+
+  return {
+    data: pageRows,
+    meta: {
+      page,
+      pageSize: PAGE_SIZE,
+      total: null,
+      hasNext,
+      hasPrev: page > 1,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// searchListingsFallback
+//
+// ST-3: Fuzzy fallback used when:
+//   a) The ranked RPC is unavailable
+//   b) A text search returns 0 results (zero-result recovery)
+//
+// Uses ILIKE with trigram GIN indexes. If that also returns 0 results,
+// the function returns an empty paginated result rather than an error.
+// ---------------------------------------------------------------------------
+
+async function searchListingsFallback(
+  supabase: SupabaseClient,
+  params: ListingSearchParams
+): Promise<PaginatedResult<ListingWithDetails>> {
+  const page = params.page ?? 1;
+  const offset = (page - 1) * PAGE_SIZE;
+  const fetchLimit = PAGE_SIZE + 1;
+
+  let dataQuery = supabase
+    .from('listings')
+    .select('*, categories(name), creator_profiles!inner(display_name, slug, deleted_at, profiles!inner(status, deleted_at))')
+    .eq('status', 'approved')
+    .is('deleted_at', null)
+    .is('creator_profiles.deleted_at', null)
+    .eq('creator_profiles.profiles.status', 'active')
+    .is('creator_profiles.profiles.deleted_at', null);
+
+  if (params.q) {
+    const term = `%${params.q.trim().replace(/[%_]/g, '\\$&')}%`;
+    dataQuery = dataQuery.or(
+      `title.ilike.${term},description.ilike.${term},city.ilike.${term},state.ilike.${term}`
+    );
+  }
+  if (params.category) {
+    dataQuery = dataQuery.eq('category_id', params.category);
+  }
+  if (params.minPrice !== undefined) dataQuery = dataQuery.gte('price', params.minPrice);
+  if (params.maxPrice !== undefined) dataQuery = dataQuery.lte('price', params.maxPrice);
+  if (params.verifiedOnly === true) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    dataQuery = (dataQuery as any).eq('creator_profiles.is_verified', true);
+  }
+
+  dataQuery = dataQuery
+    .order('created_at', { ascending: false })
+    .range(offset, offset + fetchLimit - 1);
+
+  const { data, error } = await dataQuery;
+  if (error) throw new Error(`Failed to search listings (fallback): ${error.message}`);
+
+  const raw = data ?? [];
+  const pageRows = raw.slice(0, PAGE_SIZE);
   const results = pageRows.map((r) =>
     flattenListingRow(r as Parameters<typeof flattenListingRow>[0])
   );

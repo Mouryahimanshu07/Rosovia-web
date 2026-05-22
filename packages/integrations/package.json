@@ -12,12 +12,15 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1040.0",
     "@aws-sdk/s3-request-presigner": "^3.1040.0",
+    "@rosovia/database": "workspace:*",
     "@supabase/ssr": "^0.3.0",
     "@supabase/supabase-js": "^2.42.0",
-    "@rosovia/database": "workspace:*",
+    "bullmq": "^5.77.0",
+    "ioredis": "^5.10.1",
     "razorpay": "^2.9.6"
   },
   "devDependencies": {
+    "@types/ioredis": "^5.0.0",
     "@types/node": "^20.12.7",
     "typescript": "^5.4.5"
   },

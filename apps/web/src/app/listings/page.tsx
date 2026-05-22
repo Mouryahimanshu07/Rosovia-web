@@ -7,6 +7,7 @@ import { FilterPanel } from '~/components/search/filter-panel';
 import { SearchBar } from '~/components/search/search-bar';
 import { Pagination } from '~/components/search/pagination';
 import { ActiveFilters } from '~/components/search/active-filters';
+import { SortSelect } from '~/components/search/sort-select';
 
 export const metadata: Metadata = {
   title: 'Listings — Rosovia',
@@ -80,23 +81,10 @@ export default async function PublicListingsPage({ searchParams }: ListingsPageP
                 : `Page ${result.meta.page}`}
               {q && ` for "${q}"`}
             </div>
-            <div className="flex items-center gap-2">
-              <label htmlFor="listings-sort" className="text-sm text-gray-500">Sort:</label>
-              <select
-                id="listings-sort"
-                name="sort"
-                defaultValue={sort}
-                onChange={(e) => { const f = e.currentTarget.closest('form'); if (f) f.requestSubmit(); }}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              >
-                {SORT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              <noscript>
-                <button type="submit" className="text-sm text-indigo-600">Apply</button>
-              </noscript>
-            </div>
+            <SortSelect
+              options={SORT_OPTIONS}
+              current={sort}
+            />
           </form>
 
           <ActiveFilters

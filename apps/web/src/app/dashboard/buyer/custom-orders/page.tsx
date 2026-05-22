@@ -6,6 +6,7 @@ import { DashboardShell } from '@rosovia/ui';
 import { CustomOrderCard } from '~/components/custom-order/custom-order-card';
 import { BuyerCustomOrderActions } from './buyer-custom-order-actions';
 import { CreateCustomOrderButton } from '~/components/order/create-custom-order-button';
+import { MessageOrderPartyButton } from '~/components/order/message-order-party-button';
 
 export const metadata: Metadata = {
   title: 'My Custom Orders — Rosovia',
@@ -62,6 +63,13 @@ export default async function BuyerCustomOrdersPage() {
                   />
                   {order.status === 'accepted' && (
                     <CreateCustomOrderButton customOrderId={order.id} />
+                  )}
+                  {/* Chat with Creator shortcut */}
+                  {order.creator_id && (
+                    <MessageOrderPartyButton
+                      creatorId={order.creator_id}
+                      viewAs="buyer"
+                    />
                   )}
                 </div>
               }

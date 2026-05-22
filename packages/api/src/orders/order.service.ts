@@ -6,19 +6,12 @@ import type {
   CreateListingOrderInput,
   CreateCustomOrderOrderInput,
   OrderStatusUpdateInput,
-  OrderStatus,
-} from '@rosovia/core';
-import {
-  calculatePlatformFee,
-  calculateSellerAmount,
 } from '@rosovia/core';
 
 import { getProfileByAuthUserId } from '../profiles/profile.repository';
 import { getCreatorProfileByUserId } from '../creator-profiles/creator-profile.repository';
 import {
   getOrderById,
-  getOrderByCustomOrderId,
-  createOrder,
   listCurrentBuyerOrders,
   listCurrentCreatorOrders,
   getOrderForBuyer,
@@ -127,70 +120,28 @@ export async function createOrderFromApprovedListing(
 
 // ---------------------------------------------------------------------------
 // Buyer: create order from an accepted custom order
+// Uses DB RPC for atomic lock + duplicate check + order creation.
+// Mirrors createOrderFromApprovedListing which uses create_listing_order_atomic.
 // ---------------------------------------------------------------------------
 
 export async function createOrderFromAcceptedCustomOrder(
   supabase: SupabaseClient,
   input: CreateCustomOrderOrderInput
 ): Promise<Order> {
-  const profile = await resolveActiveProfile(supabase);
+  await resolveActiveProfile(supabase);
 
-  const { data: customOrder, error: coError } = await supabase
-    .from('custom_orders')
-    .select('id, buyer_id, creator_id, status, creator_quote_amount, deleted_at')
-    .eq('id', input.customOrderId)
-    .is('deleted_at', null)
-    .single();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('create_custom_order_atomic', {
+    p_custom_order_id: input.customOrderId,
+  }) as { data: Order | Order[] | null; error: { message: string } | null };
 
-  if (coError || !customOrder) {
-    throw new Error('Custom order not found');
+  if (error) {
+    throw new Error(error.message);
   }
 
-  const co = customOrder as {
-    id: string;
-    buyer_id: string;
-    creator_id: string;
-    status: string;
-    creator_quote_amount: number | null;
-  };
-
-  if (co.buyer_id !== profile.id) {
-    throw new Error('This custom order does not belong to you');
-  }
-
-  if (co.status !== 'accepted') {
-    throw new Error('An order can only be created for an accepted custom order quote');
-  }
-
-  if (co.creator_quote_amount === null || co.creator_quote_amount <= 0) {
-    throw new Error('Custom order does not have a valid quote amount');
-  }
-
-  const existingOrder = await getOrderByCustomOrderId(supabase, co.id);
-
-  if (existingOrder) {
-    throw new Error('An order already exists for this custom order');
-  }
-
-  const amount = co.creator_quote_amount;
-  const platformFee = calculatePlatformFee(amount);
-  const sellerAmount = calculateSellerAmount(amount, platformFee);
-
-  const order = await createOrder(supabase, {
-    buyer_id: profile.id,
-    creator_id: co.creator_id,
-    listing_id: null,
-    custom_order_id: co.id,
-    amount,
-    platform_fee: platformFee,
-    seller_amount: sellerAmount,
-    currency: 'INR',
-    order_status: 'payment_pending',
-    payment_status: 'created',
-  });
-
-  return order;
+  return normalizeCreatedOrderFromRpc(data);
 }
+
 
 // ---------------------------------------------------------------------------
 // Buyer: list own orders

@@ -4,6 +4,7 @@ import { getCurrentProfile, listBuyerInquiriesForCurrentUser } from '@rosovia/ap
 import { DashboardShell } from '@rosovia/ui';
 import { InquiryCard } from '~/components/inquiry/inquiry-card';
 import { BuyerInquiryActions } from './buyer-inquiry-actions';
+import { MessageOrderPartyButton } from '~/components/order/message-order-party-button';
 
 export const metadata = {
   title: 'My Inquiries — Rosovia',
@@ -53,9 +54,18 @@ export default async function BuyerInquiriesPage() {
               inquiry={inquiry}
               viewAs="buyer"
               actions={
-                ['open', 'replied'].includes(inquiry.status) ? (
-                  <BuyerInquiryActions inquiryId={inquiry.id} />
-                ) : undefined
+                <div className="flex items-center gap-3 flex-wrap">
+                  {['open', 'replied'].includes(inquiry.status) ? (
+                    <BuyerInquiryActions inquiryId={inquiry.id} />
+                  ) : undefined}
+                  {/* Chat with Creator shortcut — only if creator_id is available */}
+                  {inquiry.creator_id && (
+                    <MessageOrderPartyButton
+                      creatorId={inquiry.creator_id}
+                      viewAs="buyer"
+                    />
+                  )}
+                </div>
               }
             />
           ))}

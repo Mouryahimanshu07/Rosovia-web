@@ -10,6 +10,8 @@ import {
 import type { Conversation, MessageWithSender } from '@rosovia/core';
 import { DashboardShell } from '@rosovia/ui';
 import { MessageComposer } from './composer';
+import { CustomOfferForm } from './custom-offer-form';
+import { AcceptOfferButton } from './accept-offer-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -200,6 +202,19 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
                   </div>
                 </div>
 
+                {/* Email Masking notice */}
+                <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 text-xs text-blue-850 flex items-center gap-2 font-medium">
+                  <span>📨</span>
+                  <span>
+                    Email Masking Relay Active: To minimize platform database overhead, your messages are automatically mirrored to the counterparty&apos;s verified email inbox. You can also reply directly from your standard email client.
+                  </span>
+                </div>
+
+                {/* Creator Custom Offer Generation widget */}
+                {currentRole === 'creator' && activeConversation.inquiry_id && (
+                  <CustomOfferForm inquiryId={activeConversation.inquiry_id} />
+                )}
+
                 {/* Message bubbles */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30">
                   {messages.length === 0 ? (
@@ -210,6 +225,84 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
                   ) : (
                     messages.map((m) => {
                       const isMe = m.sender_profile_id === profile.id;
+                      
+                      // Intercept and parse custom offers
+                      let offer: { customOrderId: string; price: number; deliveryDays: number; note: string } | null = null;
+                      if (m.body.startsWith('[CUSTOM_OFFER]:')) {
+                        try {
+                          const jsonStr = m.body.substring('[CUSTOM_OFFER]:'.length);
+                          offer = JSON.parse(jsonStr);
+                        } catch (e) {
+                          // Graceful fallback to regular text bubble
+                        }
+                      }
+
+                      if (offer) {
+                        return (
+                          <div
+                            key={m.id}
+                            className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} w-full`}
+                          >
+                            <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl p-5 shadow-md border ${
+                              isMe
+                                ? 'bg-gradient-to-br from-indigo-950 to-indigo-900 text-white border-indigo-800 rounded-br-none'
+                                : 'bg-gradient-to-br from-white to-gray-50 text-gray-900 border-indigo-200 rounded-bl-none'
+                            }`}>
+                              <div className="flex items-center justify-between border-b pb-3 mb-3 border-indigo-500/20">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-lg">⚡</span>
+                                  <span className="text-[11px] font-bold uppercase tracking-wider opacity-90">
+                                    Custom Proposal Offer
+                                  </span>
+                                </div>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                                  isMe
+                                    ? 'bg-indigo-900/60 border-indigo-700 text-indigo-200'
+                                    : 'bg-indigo-50 border-indigo-150 text-indigo-750'
+                                }`}>
+                                  Pending
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                  <span className="block text-[9px] font-bold uppercase tracking-wider opacity-60">Price</span>
+                                  <span className="text-xl font-black text-emerald-400">
+                                    ₹{offer.price.toLocaleString('en-IN')}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="block text-[9px] font-bold uppercase tracking-wider opacity-60">Delivery</span>
+                                  <span className={`text-sm font-bold flex items-center gap-1 ${isMe ? 'text-indigo-200' : 'text-indigo-900'}`}>
+                                    🕒 {offer.deliveryDays} Days
+                                  </span>
+                                </div>
+                              </div>
+
+                              {offer.note && (
+                                <div className={`rounded-lg p-3 text-xs leading-relaxed ${
+                                  isMe ? 'bg-indigo-900/40 text-indigo-100' : 'bg-indigo-50/50 text-gray-700 border border-indigo-50'
+                                }`}>
+                                  <span className="block font-bold mb-1 opacity-70">Proposal Details:</span>
+                                  <p className="whitespace-pre-wrap">{offer.note}</p>
+                                </div>
+                              )}
+
+                              {!isMe ? (
+                                <AcceptOfferButton customOrderId={offer.customOrderId} />
+                              ) : (
+                                <div className="mt-3 text-[10px] text-indigo-300 font-semibold italic text-center">
+                                  ✓ Sent. Waiting for client&apos;s acceptance.
+                                </div>
+                              )}
+                            </div>
+                            <span className="mt-1 text-[10px] text-gray-400 px-1">
+                              {formatTime(m.created_at)}
+                            </span>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div
                           key={m.id}

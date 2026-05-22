@@ -17,6 +17,21 @@ export type AdminActionType =
   | 'verification_reviewed'
   | 'category_created'
   | 'category_updated'
+  | 'refund_requested'
+  | 'refund_approved'
+  | 'refund_rejected'
+  | 'refund_processed'
+  | 'refund_failed'
+  | 'refund_cancelled'
+  | 'dispute_opened'
+  | 'dispute_under_review'
+  | 'dispute_resolved'
+  | 'dispute_rejected'
+  | 'payout_created'
+  | 'payout_processing'
+  | 'payout_paid'
+  | 'payout_failed'
+  | 'payout_on_hold'
   | 'manual_note';
 
 export type AdminActionTargetType =
@@ -28,7 +43,10 @@ export type AdminActionTargetType =
   | 'user'
   | 'verification_request'
   | 'order'
-  | 'payment';
+  | 'payment'
+  | 'refund_request'
+  | 'dispute'
+  | 'creator_payout';
 
 export interface AdminAction {
   id: string;

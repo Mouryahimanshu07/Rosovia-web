@@ -1,6 +1,6 @@
-# Module 7: Explore / Search
+# Search & Discovery — Rosovia
 
-Rosovia Module 7 implements the public discovery layer: full-text ILIKE search, URL query-param filters, and pagination across five public pages backed by PostgreSQL.
+Rosovia implements public discovery using **PostgreSQL full-text ILIKE search** with `pg_trgm` trigram indexes. Search runs entirely in-database — no external search provider is required at current scale.
 
 ---
 
@@ -137,18 +137,41 @@ category search: name ILIKE %q%, description ILIKE %q%, slug ILIKE %q%
 
 ---
 
-## Migration 005
+## Search Migrations
+
+### Migration 005
 
 `packages/database/supabase/migrations/005_explore_search_indexes.sql`
 
 Additive only — no table changes, no column drops.
 
 Adds:
-- `pg_trgm` extension
+- `pg_trgm` extension (`CREATE EXTENSION IF NOT EXISTS pg_trgm`)
 - GIN trigram indexes on `listings.title`, `listings.description`, `creator_profiles.display_name`, `creator_profiles.bio`
 - Partial compound indexes for common approved-listing queries
 - `lower(...)` indexes for case-insensitive field lookups
 - Category priority + type indexes
+
+### Migration 024
+
+`packages/database/supabase/migrations/024_search_optimization.sql`
+
+Additional performance indexes added after load analysis:
+- Additional compound indexes on `listings` for common filter combinations (category + status + created_at)
+- Additional trigram indexes on `creator_profiles.story`
+- Partial indexes for `deleted_at IS NULL` conditions
+
+### PostgreSQL vs External Search
+
+| Approach | Current | Future Scale |
+|---|---|---|
+| Engine | PostgreSQL ILIKE + `pg_trgm` GIN | External: Typesense or Meilisearch |
+| Relevance ranking | Basic ILIKE match | TF-IDF / BM25 / vector |
+| Typo tolerance | Partial (trigram similarity) | Full |
+| Faceted filtering | URL query params + SQL | Native facets |
+| Real-time index | Immediate (in-DB) | Replication lag |
+
+At current scale, PostgreSQL search is sufficient and avoids the operational complexity of a separate search cluster. The search service layer (`packages/api/src/search/`) is abstracted behind a consistent interface, making it straightforward to swap in Typesense or Meilisearch when query volume requires it.
 
 ---
 
@@ -168,22 +191,18 @@ Adds:
 
 ---
 
-## Intentionally Not Implemented (Module 7)
+## Current Limitations & Future Work
 
-- External search engines (Typesense, Meilisearch, Elasticsearch)
-- AI / vector / semantic search
-- Redis caching or queues
-- Real-time search results
-- Saved searches
-- Promoted / sponsored listings
-- Listing count per category card
-- Infinite scroll (simple prev/next pagination only)
-- Inquiries, orders, payments, reviews
-- Admin dashboard, verification workflow
-- Reports, subscriptions
+| Feature | Status |
+|---|---|
+| External search (Typesense, Meilisearch) | ❌ Not implemented — PostgreSQL is sufficient at current scale |
+| AI / vector / semantic search | ❌ Not implemented |
+| Redis caching for search results | ❌ Not implemented |
+| Real-time search suggestions | ❌ Not implemented |
+| Saved searches | ❌ Not implemented |
+| Promoted / sponsored listings | ❌ Not implemented |
+| Listing count per category card | ❌ Not implemented |
+| Infinite scroll | ❌ Simple prev/next pagination only |
 
 ---
 
-## Next Module
-
-**Module 8: Inquiry** — Allow buyers to send inquiries to creators about specific listings, with message threading, status tracking, and notification hooks.

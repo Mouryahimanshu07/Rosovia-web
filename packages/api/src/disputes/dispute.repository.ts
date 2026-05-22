@@ -64,3 +64,73 @@ export async function listDisputesByOpenedBy(
   if (error) throw new Error(`Failed to list disputes: ${error.message}`);
   return (data ?? []) as Dispute[];
 }
+
+export async function listAllDisputesForAdmin(
+  supabase: SupabaseClient,
+  params: DisputeListParams = {}
+): Promise<Dispute[]> {
+  const page = params.page ?? 1;
+  const offset = (page - 1) * PAGE_SIZE;
+
+  let query = supabase
+    .from('disputes')
+    .select('*')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1);
+
+  if (params.status) query = query.eq('status', params.status);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to list all disputes for admin: ${error.message}`);
+  return (data ?? []) as Dispute[];
+}
+
+export async function listDisputesByCreatorProfileId(
+  supabase: SupabaseClient,
+  creatorProfileId: string,
+  params: DisputeListParams = {}
+): Promise<Dispute[]> {
+  const page = params.page ?? 1;
+  const offset = (page - 1) * PAGE_SIZE;
+
+  let query = supabase
+    .from('disputes')
+    .select('*, orders!inner(creator_id)')
+    .eq('orders.creator_id', creatorProfileId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1);
+
+  if (params.status) query = query.eq('status', params.status);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to list disputes for creator: ${error.message}`);
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  return (data ?? []).map(({ orders, ...dispute }) => dispute) as unknown as Dispute[];
+}
+
+export async function updateDisputeStatus(
+  supabase: SupabaseClient,
+  disputeId: string,
+  data: {
+    status: string;
+    resolution_note?: string | null;
+    resolved_by?: string | null;
+    resolved_at?: string | null;
+  }
+): Promise<Dispute> {
+  const { data: updated, error } = await supabase
+    .from('disputes')
+    .update(data)
+    .eq('id', disputeId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update dispute status: ${error.message}`);
+  }
+  return updated as Dispute;
+}
+

@@ -5,12 +5,15 @@ alter table public.orders
   add column if not exists settled_at timestamptz null;
 
 alter table public.orders
+  drop constraint if exists orders_tax_amount_check,
   add constraint orders_tax_amount_check check (tax_amount >= 0);
 
 alter table public.orders
+  drop constraint if exists orders_gateway_fee_check,
   add constraint orders_gateway_fee_check check (gateway_fee >= 0);
 
 alter table public.orders
+  drop constraint if exists orders_settlement_status_check,
   add constraint orders_settlement_status_check check (
     settlement_status in ('not_ready', 'pending', 'settled', 'failed', 'on_hold')
   );

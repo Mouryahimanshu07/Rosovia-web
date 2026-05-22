@@ -7,6 +7,8 @@ ADD COLUMN IF NOT EXISTS sort_order integer not null default 0;
 
 -- Add constraints
 ALTER TABLE public.media_assets
+DROP CONSTRAINT IF EXISTS media_assets_sort_order_check,
+DROP CONSTRAINT IF EXISTS media_assets_alt_text_length_check,
 ADD CONSTRAINT media_assets_sort_order_check CHECK (sort_order >= 0),
 ADD CONSTRAINT media_assets_alt_text_length_check CHECK (char_length(alt_text) <= 300);
 

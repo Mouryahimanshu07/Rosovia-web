@@ -115,3 +115,78 @@ export async function updateOrderStatusAction(
     };
   }
 }
+
+import { createAdminSupabaseClient } from '~/lib/supabase/admin';
+
+export async function updateOrderMetadataAction(
+  orderId: string,
+  metadataChanges: Record<string, any>
+): Promise<ActionResult<Order>> {
+  try {
+    const supabase = createWebServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Not authenticated' };
+
+    // Fetch order
+    const { data: order, error: fetchError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    if (fetchError || !order) {
+      return { success: false, error: fetchError?.message || 'Order not found' };
+    }
+
+    // Verify user is buyer or creator
+    const isBuyer = order.buyer_id === user.id;
+    let isCreator = false;
+
+    if (!isBuyer) {
+      const { data: creatorProfile } = await supabase
+        .from('creator_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      if (creatorProfile && order.creator_id === creatorProfile.id) {
+        isCreator = true;
+      }
+    }
+
+    if (!isBuyer && !isCreator) {
+      return { success: false, error: 'Not authorized to update this order' };
+    }
+
+    // Prepare updated metadata
+    const existingMetadata = order.metadata || {};
+    const newMetadata = {
+      ...existingMetadata,
+      ...metadataChanges,
+    };
+
+    // Update using admin client to bypass client RLS update restrictions
+    const adminSupabase = createAdminSupabaseClient();
+    const { data: updatedOrder, error: updateError } = await adminSupabase
+      .from('orders')
+      .update({ metadata: newMetadata })
+      .eq('id', orderId)
+      .select('*')
+      .single();
+
+    if (updateError || !updatedOrder) {
+      return { success: false, error: updateError?.message || 'Failed to update order metadata' };
+    }
+
+    revalidateOrderPaths();
+    revalidatePath(`/dashboard/buyer/orders/${orderId}`);
+    revalidatePath(`/dashboard/creator/orders/${orderId}`);
+
+    return { success: true, data: updatedOrder as Order };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred',
+    };
+  }
+}
+

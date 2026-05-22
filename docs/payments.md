@@ -1,43 +1,93 @@
-# Rosovia Module 11: Payments
+# Payments — Rosovia
 
-## Scope
+## Overview
 
-Module 11 connects existing orders (Module 10) to Razorpay, enabling buyers to pay for their orders. The webhook is the authoritative source of truth for all payment state changes.
+Rosovia integrates with **Razorpay** for payment processing. The Razorpay webhook is the authoritative source of truth for all payment state changes — the client never directly marks a payment as paid.
 
 ---
 
-## Razorpay Checkout Flow
+## Payment Flow
 
 ```
 Buyer clicks "Pay Now"
-  └─ createPaymentForOrderAction (Server Action)
+  └─ createPaymentForOrderAction (Next.js Server Action)
+       ├─ Authenticate buyer (getUser)
        ├─ Validate: order belongs to buyer, order_status = payment_pending, amount > 0
-       ├─ POST https://api.razorpay.com/v1/orders  →  provider_order_id
+       ├─ POST https://api.razorpay.com/v1/orders → { provider_order_id }
        ├─ INSERT public.payments  (status = pending)
        ├─ UPDATE public.orders    (payment_status = pending)
-       └─ Return: { razorpayKeyId, providerOrderId, amountInPaise, currency, orderId, appPaymentId }
+       └─ Return to client: { razorpayKeyId, providerOrderId, amountInPaise, currency }
 
-Client (PayNowButton)
+Client (PayNowButton — browser)
   └─ Load checkout.razorpay.com/v1/checkout.js
-       └─ new Razorpay({ order_id: providerOrderId, key: razorpayKeyId, ... }).open()
+       └─ new Razorpay({ order_id: providerOrderId, key: razorpayKeyId }).open()
             └─ Buyer completes payment in Razorpay modal
 
-Razorpay (async)
+Razorpay → Rosovia (async, server-to-server)
   └─ POST /api/webhooks/razorpay  (x-razorpay-signature header)
-       ├─ Read raw body as text
-       ├─ Verify HMAC-SHA256 signature   →  invalid → 400
-       ├─ Parse JSON + validate schema
-       ├─ Idempotency: check webhook_event_id / payment status
+       ├─ Read raw request body as text (before JSON parse — required for HMAC)
+       ├─ Verify HMAC-SHA256 signature  →  invalid → 400
+       ├─ Parse + validate webhook event schema
+       ├─ Idempotency check (webhook_event_id + payment status)
        ├─ payment.captured:
-       │    ├─ Verify amount matches expected (paise)
-       │    ├─ UPDATE public.payments  (status = paid, webhook_received = true)
-       │    ├─ UPDATE public.orders    (payment_status = paid, order_status = paid)
-       │    └─ INSERT public.order_status_history  (old → paid, note = "Payment captured by Razorpay")
-       ├─ payment.failed:
-       │    ├─ UPDATE public.payments  (status = failed)
-       │    └─ UPDATE public.orders    (payment_status = failed, order_status unchanged)
-       └─ Return 200
+       │    ├─ Verify amount matches expected (paise) from DB
+       │    ├─ Call atomic RPC: process_razorpay_payment_capture (016_payment_order_transactions.sql)
+       │    │    ├─ UPDATE public.payments  (status = paid, webhook_received = true)
+       │    │    ├─ UPDATE public.orders    (payment_status = paid, order_status = paid)
+       │    │    └─ INSERT public.order_status_history (note = "Payment captured by Razorpay")
+       │    └─ Return 200
+       └─ payment.failed:
+            ├─ UPDATE public.payments  (status = failed, webhook_received = true)
+            ├─ UPDATE public.orders    (payment_status = failed)
+            └─ Return 200
 ```
+
+---
+
+## Atomic Payment Update (Security-Definer RPC)
+
+The `payment.captured` webhook handler calls `process_razorpay_payment_capture` — a `SECURITY DEFINER` PostgreSQL RPC defined in migration `016_payment_order_transactions.sql`.
+
+This RPC:
+- Runs in a single atomic database transaction
+- Updates `payments`, `orders`, and inserts `order_status_history` in one call
+- Cannot be called directly by authenticated users (restricted to service-role context from the webhook handler)
+- Prevents partial updates (e.g., payment marked paid but order not updated)
+
+---
+
+## Webhook Signature Verification
+
+```typescript
+// From /api/webhooks/razorpay/route.ts
+const rawBody = await request.text();  // Read as text BEFORE any JSON.parse
+
+const expectedSignature = createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!)
+  .update(rawBody)
+  .digest('hex');
+
+// Constant-time comparison (prevents timing attacks)
+if (expectedSignature !== receivedSignature) {
+  return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+}
+```
+
+- Invalid signature → `400 Bad Request`
+- Valid but unprocessable (non-fatal) → `200` (prevents Razorpay retries)
+- Unexpected server error → `500` (Razorpay will retry)
+
+---
+
+## Idempotency
+
+Duplicate webhooks are handled at multiple levels:
+
+| Mechanism | How |
+|---|---|
+| `webhook_event_id` | Unique nullable column. Composed as `{event}:{provider_payment_id}`. Duplicate triggers a skip. |
+| `provider_payment_id` | Unique index — prevents duplicate payment rows for the same Razorpay payment. |
+| Status check | If `payment.status === 'paid'` on a `payment.captured` event, skip. |
+| All duplicates | Return `200` to prevent Razorpay from retrying. |
 
 ---
 
@@ -47,23 +97,21 @@ Razorpay (async)
 |---|---|---|
 | `id` | uuid | Primary key |
 | `order_id` | uuid | FK → `orders.id` ON DELETE CASCADE |
-| `provider` | text | `razorpay` (only) |
-| `provider_payment_id` | text | Razorpay payment ID, nullable, unique when set |
-| `provider_order_id` | text | Razorpay order ID, nullable, unique when set |
+| `provider` | text | `razorpay` (only supported value) |
+| `provider_payment_id` | text | Razorpay payment ID — unique when set |
+| `provider_order_id` | text | Razorpay order ID — unique when set |
 | `provider_payment_link_id` | text | Reserved for future Payment Links |
-| `amount` | numeric | Order amount (INR, ≥ 0) |
+| `amount` | numeric | Order amount in INR (≥ 0) |
 | `currency` | text | Default `INR` |
-| `status` | text | See status list |
-| `webhook_received` | boolean | `true` once webhook confirmed |
-| `webhook_event_id` | text | Unique nullable — idempotency key |
-| `raw_payload` | jsonb | Raw webhook body |
+| `status` | text | See status list below |
+| `webhook_received` | boolean | `true` after webhook confirmation |
+| `webhook_event_id` | text | Unique nullable idempotency key |
+| `raw_payload` | jsonb | Raw webhook body (not forwarded to Sentry) |
 | `created_at` | timestamptz | Auto |
 | `updated_at` | timestamptz | Auto via trigger |
 | `deleted_at` | timestamptz | Soft delete |
 
-**Status values:** `created` · `pending` · `paid` · `failed` · `refunded` · `partially_refunded` · `cancelled`
-
-**Module 11 uses:** `created` · `pending` · `paid` · `failed`
+**Payment status values:** `created` · `pending` · `paid` · `failed` · `refunded` · `partially_refunded` · `cancelled`
 
 ---
 
@@ -73,193 +121,100 @@ Razorpay (async)
 |---|---|---|
 | Buyer reads own | SELECT | Buyer via `orders.buyer_id` join |
 | Creator reads assigned | SELECT | Creator via `orders.creator_id` + `creator_profiles` join |
-| Buyer can create payment | INSERT | Buyer, status in `created/pending`, provider = `razorpay` |
+| Buyer can create payment | INSERT | Buyer, status in `created`/`pending`, provider = `razorpay` |
 | Admin reads all | SELECT | `public.is_admin()` |
 | Admin updates all | UPDATE | `public.is_admin()` |
 
-> **Note:** Webhook updates (marking `paid`/`failed`) use the **service-role Supabase client** which bypasses RLS. No public UPDATE policy exists for payment status — users cannot mark their own payment as paid.
+> **No RLS policy allows setting `payment_status = paid`.** Only the service-role webhook handler can do this via the atomic RPC.
 
 ---
 
-## Webhook Verification
+## Inventory / Stock Reservation
 
-The webhook route reads the raw request body as **text** before any JSON parsing.
+Migration `017_inventory_reservation.sql` adds stock reservation logic for listing-based orders:
 
-Signature verification uses HMAC-SHA256:
+- When an order is created from a listing with `stock > 0`, the stock is decremented atomically.
+- If payment fails, the reservation is released.
+- If payment succeeds (webhook confirmed), the reservation is finalized.
+
+This prevents overselling when multiple buyers try to purchase the same limited-stock listing simultaneously.
+
+---
+
+## Order Fulfillment After Payment
+
+After `order_status = paid`, the fulfillment flow continues:
+
+```
+paid → accepted → in_progress → shipped → delivered → completed
+```
+
+- Creator actions: `accepted`, `in_progress`, `shipped`, `delivered`
+- Buyer actions: `completed` (confirms receipt), `disputed`
+- Each transition is recorded in `order_status_history`
+
+---
+
+## Amount Handling
 
 ```typescript
-const expectedSignature = createHmac('sha256', webhookSecret)
-  .update(rawBody)
-  .digest('hex');
-// Constant-time comparison to prevent timing attacks
+// Always convert to integer paise (1 INR = 100 paise)
+const amountInPaise = Math.round(order.amount * 100);
+// e.g. INR 999.99 → 99999 paise
 ```
 
-- Invalid signature → `400 Bad Request`
-- Valid but unprocessable → `200` (to prevent retries)
-- Server error → `500` (Razorpay will retry)
-
----
-
-## Idempotency
-
-Duplicate webhooks are handled at multiple levels:
-
-1. **`webhook_event_id`** — unique nullable column. Composed as `{event}:{provider_payment_id}`. If the same value already exists, the webhook is skipped.
-2. **`provider_payment_id`** — unique index prevents duplicate payment records for the same Razorpay payment.
-3. **Status check** — if `payment.status === 'paid'` on `payment.captured`, skip.
-4. All duplicate webhooks return `200` to prevent Razorpay retries.
-
----
-
-## Order / Payment Status Transitions
-
-### On `payment.captured`
-
-```
-public.payments:  status → paid, webhook_received → true
-public.orders:    payment_status → paid, order_status → paid
-order_status_history: new_status = paid, changed_by = null, note = "Payment captured by Razorpay"
-```
-
-### On `payment.failed`
-
-```
-public.payments:  status → failed, webhook_received → true
-public.orders:    payment_status → failed, order_status unchanged (payment_pending)
-```
-
-### Post-payment fulfillment (Module 10 creator actions)
-
-After `order_status = paid`, creators can continue fulfillment:
-
-```
-paid → in_progress → shipped → delivered → completed
-```
+The webhook verifies the captured amount matches the expected amount from the database. A mismatch (e.g., from a tampered client request) rejects the capture.
 
 ---
 
 ## Environment Variables
 
 ```env
-# Required for Razorpay integration
-RAZORPAY_KEY_ID=rzp_test_xxxxx        # Publishable — returned from server action
-RAZORPAY_KEY_SECRET=xxxxx             # SECRET — never exposed to client
-RAZORPAY_WEBHOOK_SECRET=xxxxx        # SECRET — never exposed to client
-
-# Required for webhook admin client
-SUPABASE_SERVICE_ROLE_KEY=xxxxx      # SECRET — webhook route only
+RAZORPAY_KEY_ID=rzp_test_XXXX       # Returned from server action to client — publishable key
+RAZORPAY_KEY_SECRET=XXXX            # SECRET — server only — never sent to client
+RAZORPAY_WEBHOOK_SECRET=XXXX        # SECRET — webhook signature verification only
+SUPABASE_SERVICE_ROLE_KEY=XXXX      # SECRET — webhook handler uses service-role client
 ```
 
 ---
 
 ## Security Rules
 
-- `RAZORPAY_KEY_SECRET` is never returned to the client.
-- `RAZORPAY_WEBHOOK_SECRET` is never returned to the client.
-- `SUPABASE_SERVICE_ROLE_KEY` is only used in the server-side webhook route handler.
-- `PayNowButton` client component only receives the return value from `createPaymentForOrderAction` — no secrets.
+- `RAZORPAY_KEY_SECRET` is **never** returned to the client.
+- `RAZORPAY_WEBHOOK_SECRET` is **never** returned to the client.
+- `SUPABASE_SERVICE_ROLE_KEY` is **only** used in the webhook route handler (server-side).
+- `PayNowButton` (client component) only receives: `razorpayKeyId`, `providerOrderId`, `amountInPaise`, `currency` — no secrets.
 - The client Razorpay handler does **not** mark the payment as paid.
 - No RLS policy allows authenticated users to set `payment_status = paid`.
-- Amount always comes from the database row, never from the client.
-- Buyer cannot pay for another user's order (enforced in service layer + RLS).
-- Webhook amount is verified against expected paise before marking paid.
+- Amount always comes from the database, never from the client request.
+- Buyer cannot pay for another user's order (enforced in service layer and RLS).
+- `raw_payload` from the webhook body is stored in the database but is scrubbed from Sentry via `beforeSend`.
 
 ---
 
-## Amounts
+## Refunds (Foundation Only)
 
-```typescript
-// Always round to integer paise
-const amountInPaise = Math.round(order.amount * 100);
-// e.g. INR 999.99 → 99999 paise
-```
+> ⚠️ **Current State**: The `refund_requests` table, TypeScript types, Zod validators, repository, service layer, and buyer dashboard page (`/dashboard/buyer/refunds`) are all implemented. However, **no actual Razorpay Refund API calls are made**. Refunds are a manual admin process at this stage.
 
----
+When a buyer requests a refund:
+1. A `refund_requests` row is created with `status = requested`
+2. Admin reviews the request in the disputes/admin dashboard
+3. Admin manually approves or rejects and logs the action to `admin_actions`
+4. Actual money is returned manually (outside the system)
 
-## How to Apply Migration
-
-```bash
-# From project root
-supabase db push
-# This applies 009_payments.sql
-```
+**Future work**: Integrate `POST https://api.razorpay.com/v1/payments/{id}/refund` to automate refund processing when a refund is approved.
 
 ---
 
-## Testing Checklist
+## What Is Not Yet Implemented
 
-### Setup
-1. `supabase db push` — apply migration 009
-2. Set env vars in `apps/web/.env.local`:
-   ```
-   RAZORPAY_KEY_ID=rzp_test_...
-   RAZORPAY_KEY_SECRET=...
-   RAZORPAY_WEBHOOK_SECRET=...
-   ```
-3. `pnpm dev`
-
-### Create a payable order
-4. Log in as a buyer with an active account
-5. Create an order from a listing (via `/listings/[slug]`)
-6. Verify: `order_status = payment_pending`, `payment_status = created`, `amount > 0`
-
-### Pay Now flow
-7. Open `/dashboard/buyer/orders/[id]`
-8. Click **Pay Now** — Razorpay Checkout modal opens
-9. Complete test payment (use Razorpay test card `4111 1111 1111 1111`)
-
-### Webhook verification
-10. Configure Razorpay webhook in Dashboard → Settings → Webhooks:
-    - URL: `https://your-domain.com/api/webhooks/razorpay`
-    - Events: `payment.captured`, `payment.failed`
-    - Secret: same as `RAZORPAY_WEBHOOK_SECRET`
-11. After test payment, webhook fires `payment.captured`
-12. Verify `public.payments`: `status = paid`, `webhook_received = true`, `provider_payment_id` set
-13. Verify `public.orders`: `payment_status = paid`, `order_status = paid`
-14. Verify `public.order_status_history`: entry with `new_status = paid`, `changed_by = null`
-
-### Failure path
-15. Use Razorpay test failure card or simulate failed payment
-16. Verify `public.payments.status = failed`
-17. Verify `public.orders.payment_status = failed`, `order_status` unchanged
-
-### Duplicate webhook
-18. Send the same webhook event twice (use Razorpay Dashboard → resend)
-19. Verify no duplicate `public.payments` rows
-20. Webhook returns 200 both times
-
-### Security
-21. Send a webhook with an invalid signature → must receive `400`
-22. Try updating `payment_status` directly via Supabase anon key → must fail (no RLS policy)
-23. Inspect browser network tab → `RAZORPAY_KEY_SECRET` must NOT appear anywhere
-
-### Creator fulfillment after payment
-24. As creator, open `/dashboard/creator/orders/[id]` of the paid order
-25. Click **Start Work** → order moves `paid → in_progress`
-26. Continue: `in_progress → shipped → delivered`
-27. As buyer, click **Mark Completed**
-
----
-
-## What Is Intentionally NOT Implemented
-
-- Refunds
-- Wallet / escrow
-- Automated seller payouts
-- Settlement tracking
-- Platform accounting
-- Invoices
-- Subscriptions
-- Stripe / global payments (only INR/Razorpay)
-- Admin payment dashboard
-- Notifications on payment
-- Razorpay Payment Links (not needed with Checkout approach)
-
----
-
-## Next Module: Module 12 — Reviews
-
-Module 12 will implement:
-- Buyer-to-creator reviews after order completion
-- Rating system
-- Review display on creator profiles and listings
+| Feature | Notes |
+|---|---|
+| Automated refunds | Manual admin only — no Razorpay Refund API integration |
+| Automated creator payouts | Manual only — no RazorpayX / bank transfer automation |
+| Platform fee collection | `platform_fee` field exists but is always 0 — no fee deduction |
+| Wallet / escrow | Not planned for current scope |
+| Subscriptions | Not planned |
+| Stripe / international payments | INR + Razorpay only |
+| Payment invoices / receipts | Not implemented |
+| Settlement reporting | Not implemented |
