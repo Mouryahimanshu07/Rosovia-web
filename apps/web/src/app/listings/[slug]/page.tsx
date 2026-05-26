@@ -1,8 +1,14 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 import { createWebServerClient } from '~/lib/supabase/server';
-import { getPublicListingBySlug, listReviewsForPublicListing } from '@rosovia/api';
+import {
+  getPublicListingBySlug,
+  listReviewsForPublicListing,
+  isListingSavedForUser,
+} from '@rosovia/api';
+import { SaveButton } from '~/components/saved/save-button';
 import { ListingTypeBadge } from '~/components/listing/listing-type-badge';
 import { ListingMetadataView } from '~/components/listing/listing-metadata-view';
 import { InquiryForm } from '~/components/inquiry/inquiry-form';
@@ -10,6 +16,7 @@ import { CustomOrderForm } from '~/components/custom-order/custom-order-form';
 import { CreateListingOrderButton } from '~/components/order/create-listing-order-button';
 import { ReviewList } from '~/components/review/review-list';
 import { ReportButton } from '~/components/report/report-button';
+import { VerificationBadge } from '~/components/creator/verification-badge';
 import type { InquiryType, ListingType } from '@rosovia/core';
 
 interface Props {
@@ -53,6 +60,8 @@ export default async function PublicListingDetailPage({ params }: Props) {
   // Check auth state for inquiry and custom order sections
   const { data: { user } } = await supabase.auth.getUser();
 
+  const initialSaved = user ? await isListingSavedForUser(supabase, listing.id) : false;
+
   const inquiryType = defaultInquiryTypeForListing(listing.listing_type);
   const loginRedirect = `/login?redirected_from=/listings/${params.slug}`;
 
@@ -66,18 +75,37 @@ export default async function PublicListingDetailPage({ params }: Props) {
             <span className="text-sm text-gray-500">{listing.category_name}</span>
           )}
         </div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{listing.title}</h1>
+          {user && (
+            <SaveButton
+              targetType="listing"
+              targetId={listing.id}
+              initialSaved={initialSaved}
+            />
+          )}
+        </div>
         {listing.creator_display_name && (
-          <p className="text-sm text-gray-500">
-            by{' '}
+          <div className="flex items-center gap-2 mt-1 flex-wrap text-sm text-gray-500">
+            <span>by</span>
             {listing.creator_slug ? (
-              <a href={`/creators/${listing.creator_slug}`} className="text-indigo-600 hover:underline">
+              <Link href={`/creators/${listing.creator_slug}`} className="font-semibold text-indigo-600 hover:underline">
                 {listing.creator_display_name}
-              </a>
+              </Link>
             ) : (
-              listing.creator_display_name
+              <span className="font-semibold text-gray-800">{listing.creator_display_name}</span>
             )}
-          </p>
+            {listing.creator_verification_level && listing.creator_verification_level !== 'none' && (
+              <VerificationBadge level={listing.creator_verification_level} className="scale-90 transform origin-left shadow-sm" />
+            )}
+            {listing.creator_rating_count && listing.creator_rating_count > 0 ? (
+              <span className="text-xs text-gray-400 flex items-center gap-1 ml-1 border-l pl-2 border-gray-200">
+                <span className="text-amber-500">★</span>
+                <span className="font-medium text-gray-700">{listing.creator_rating_avg?.toFixed(1)}</span>
+                <span>({listing.creator_rating_count} reviews)</span>
+              </span>
+            ) : null}
+          </div>
         )}
       </div>
 

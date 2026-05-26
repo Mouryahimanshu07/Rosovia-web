@@ -1,3 +1,5 @@
+import type { VerificationLevel } from './creator-profile';
+
 export type ListingType =
   | 'product'
   | 'service'
@@ -53,7 +55,7 @@ export interface Listing {
   updated_at: string;
   deleted_at: string | null;
   reserved_stock: number;
- sold_stock: number;
+  sold_stock: number;
 }
 
 /** Listing joined with category and creator profile details */
@@ -61,4 +63,9 @@ export interface ListingWithDetails extends Listing {
   category_name: string | null;
   creator_display_name: string | null;
   creator_slug: string | null;
+  creator_is_verified?: boolean | null;
+  creator_verification_level?: VerificationLevel | null;
+  creator_rating_avg?: number | null;
+  creator_rating_count?: number | null;
 }
+

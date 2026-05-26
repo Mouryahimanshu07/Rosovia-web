@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '~/lib/supabase/admin';
 import { handleRazorpayWebhook } from '@rosovia/api';
 import { captureAppError } from '~/lib/analytics/capture-error';
+import { isPaymentsEnabled } from '@rosovia/core';
 
 /**
  * POST /api/webhooks/razorpay
@@ -16,6 +17,10 @@ import { captureAppError } from '~/lib/analytics/capture-error';
  * - Returns 400 on invalid signature, 200 on success or duplicate.
  */
 export async function POST(req: NextRequest) {
+  if (!isPaymentsEnabled()) {
+    return NextResponse.json({ error: 'Payments are disabled' }, { status: 400 });
+  }
+
   // Read raw body as text — required for signature verification
   let rawBody: string;
   try {

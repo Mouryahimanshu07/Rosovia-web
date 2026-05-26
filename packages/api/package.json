@@ -12,7 +12,8 @@
   "dependencies": {
     "@rosovia/core": "workspace:*",
     "@rosovia/integrations": "workspace:*",
-    "@supabase/supabase-js": "^2.42.0"
+    "@supabase/supabase-js": "^2.42.0",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

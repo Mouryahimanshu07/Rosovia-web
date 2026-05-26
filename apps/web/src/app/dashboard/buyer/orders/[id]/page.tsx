@@ -10,6 +10,7 @@ import {
   getDeliveryDetail,
 } from '@rosovia/api';
 import { DashboardShell } from '@rosovia/ui';
+import { isPaymentsEnabled } from '@rosovia/core';
 import { OrderStatusBadge } from '~/components/order/order-status-badge';
 import { PaymentStatusBadge } from '~/components/order/payment-status-badge';
 import { OrderActions } from '~/components/order/order-actions';
@@ -131,11 +132,22 @@ export default async function BuyerOrderDetailPage({ params }: Props) {
           {/* Pay Now — shown only when payable */}
           {isPayable && (
             <div className="mb-5">
-              <RazorpayPreloader />
-              <PayNowButton orderId={order.id} amountDisplay={amountDisplay} />
-              <p className="text-xs text-gray-400 mt-2">
-                Payment confirmation is handled securely via Razorpay webhook.
-              </p>
+              {isPaymentsEnabled() ? (
+                <>
+                  <RazorpayPreloader />
+                  <PayNowButton orderId={order.id} amountDisplay={amountDisplay} />
+                  <p className="text-xs text-gray-400 mt-2">
+                    Payment confirmation is handled securely via Razorpay webhook.
+                  </p>
+                </>
+              ) : (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+                  <p className="font-semibold">Online payment is currently disabled.</p>
+                  <p className="mt-1">
+                    You can still contact the creator or request a custom order.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

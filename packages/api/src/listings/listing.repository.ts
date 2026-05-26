@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Listing, ListingWithDetails, ListingStatus } from '@rosovia/core';
+import type { Listing, ListingWithDetails, ListingStatus, VerificationLevel } from '@rosovia/core';
 
 export interface ListListingsParams {
   limit?: number;
@@ -9,7 +9,14 @@ export interface ListListingsParams {
 function flattenListing(
   row: Listing & {
     categories?: { name: string } | null;
-    creator_profiles?: { display_name: string; slug: string } | null;
+    creator_profiles?: {
+      display_name: string;
+      slug: string;
+      is_verified?: boolean;
+      verification_level?: VerificationLevel;
+      rating_avg?: number;
+      rating_count?: number;
+    } | null;
   }
 ): ListingWithDetails {
   return {
@@ -17,6 +24,10 @@ function flattenListing(
     category_name: row.categories?.name ?? null,
     creator_display_name: row.creator_profiles?.display_name ?? null,
     creator_slug: row.creator_profiles?.slug ?? null,
+    creator_is_verified: row.creator_profiles?.is_verified ?? false,
+    creator_verification_level: row.creator_profiles?.verification_level ?? 'none',
+    creator_rating_avg: row.creator_profiles?.rating_avg ?? 0,
+    creator_rating_count: row.creator_profiles?.rating_count ?? 0,
   };
 }
 
@@ -44,7 +55,7 @@ export async function getListingBySlug(
 ): Promise<ListingWithDetails | null> {
   const { data, error } = await supabase
     .from('listings')
-    .select('*, categories ( name ), creator_profiles ( display_name, slug )')
+    .select('*, categories ( name ), creator_profiles ( display_name, slug, is_verified, verification_level, rating_avg, rating_count )')
     .eq('slug', slug)
     .is('deleted_at', null)
     .single();
@@ -77,7 +88,7 @@ export async function listPublicListings(
 
   const { data, error } = await supabase
     .from('listings')
-    .select('*, categories ( name ), creator_profiles!inner ( display_name, slug, deleted_at, profiles!inner(status, deleted_at) )')
+    .select('*, categories ( name ), creator_profiles!inner ( display_name, slug, is_verified, verification_level, rating_avg, rating_count, deleted_at, profiles!inner(status, deleted_at) )')
     .eq('status', 'approved')
     .is('deleted_at', null)
     // B1 fix: ensure creator is not deleted and their account is active
@@ -91,6 +102,29 @@ export async function listPublicListings(
   return (data ?? []).map((r) => flattenListing(r as Parameters<typeof flattenListing>[0]));
 }
 
+export async function listCreatorPublicListings(
+  supabase: SupabaseClient,
+  creatorId: string,
+  params: ListListingsParams = {}
+): Promise<ListingWithDetails[]> {
+  const limit = params.limit ?? 24;
+  const offset = params.offset ?? 0;
+
+  const { data, error } = await supabase
+    .from('listings')
+    .select('*, categories ( name ), creator_profiles!inner ( display_name, slug, is_verified, verification_level, rating_avg, rating_count, deleted_at, profiles!inner(status, deleted_at) )')
+    .eq('creator_id', creatorId)
+    .eq('status', 'approved')
+    .is('deleted_at', null)
+    .is('creator_profiles.deleted_at', null)
+    .eq('creator_profiles.profiles.status', 'active')
+    .is('creator_profiles.profiles.deleted_at', null)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) throw new Error(`Failed to list creator public listings: ${error.message}`);
+  return (data ?? []).map((r) => flattenListing(r as Parameters<typeof flattenListing>[0]));
+}
 
 export async function listCurrentCreatorListings(
   supabase: SupabaseClient,

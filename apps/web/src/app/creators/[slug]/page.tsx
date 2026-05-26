@@ -3,13 +3,18 @@ import Image from 'next/image';
 import type { Metadata } from 'next';
 export const dynamic = 'force-dynamic';
 import { createWebServerClient } from '~/lib/supabase/server';
-import { getPublicCreatorProfileBySlug, listReviewsForPublicCreator } from '@rosovia/api';
+import {
+  getPublicCreatorProfileBySlug,
+  listReviewsForPublicCreator,
+  listCreatorPublicListings,
+  listCreatorPublicPortfolioMedia,
+  isCreatorSavedForUser,
+  listCollectionsForPublicProfile,
+} from '@rosovia/api';
+import { SaveButton } from '~/components/saved/save-button';
 import { VerificationBadge } from '~/components/creator/verification-badge';
 import { RatingSummary } from '~/components/creator/rating-summary';
-import { InquiryForm } from '~/components/inquiry/inquiry-form';
-import { CustomOrderForm } from '~/components/custom-order/custom-order-form';
-import { ReviewList } from '~/components/review/review-list';
-import { ReportButton } from '~/components/report/report-button';
+import { CreatorTabs } from '~/components/creator/creator-tabs';
 
 interface Props {
   params: { slug: string };
@@ -31,177 +36,111 @@ export default async function CreatorPublicProfilePage({ params }: Props) {
 
   if (!profile) notFound();
 
-  const reviews = await listReviewsForPublicCreator(supabase, profile.id);
+  // Parallelize public data fetching
+  const [reviews, listings, portfolioMedia, collections] = await Promise.all([
+    listReviewsForPublicCreator(supabase, profile.id),
+    listCreatorPublicListings(supabase, profile.id),
+    listCreatorPublicPortfolioMedia(supabase, profile.user_id),
+    listCollectionsForPublicProfile(supabase, profile.id),
+  ]);
+
+  // Partition listings into appropriate sections
+  const services = listings.filter((l) =>
+    ['service', 'mentorship', 'workshop', 'event_booking'].includes(l.listing_type)
+  );
+  const shop = listings.filter((l) => l.listing_type === 'product');
+  const portfolioListings = listings.filter((l) => l.listing_type === 'portfolio');
 
   const location = [profile.city, profile.state, profile.country].filter(Boolean).join(', ');
 
-  // Check if the visitor is authenticated (for inquiry section)
+  // Get authenticated user for custom requests & inquiries
   const { data: { user } } = await supabase.auth.getUser();
 
+  const initialSaved = user ? await isCreatorSavedForUser(supabase, profile.id) : false;
+
   return (
-    <main className="max-w-3xl mx-auto px-4 py-10">
-      {/* Header */}
-      <div className="flex items-start gap-6 mb-8">
-        <div className="w-20 h-20 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0 relative">
+    <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+      {/* Header card with glassmorphism styling elements */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/40 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-50/40 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="w-24 h-24 rounded-full bg-indigo-50 border-2 border-indigo-100 overflow-hidden flex-shrink-0 relative shadow-sm">
           {profile.profile_image_url ? (
-            <Image src={profile.profile_image_url} alt={profile.display_name} fill sizes="80px" className="object-cover" />
+            <Image
+              src={profile.profile_image_url}
+              alt={profile.display_name}
+              fill
+              sizes="96px"
+              className="object-cover"
+              priority
+            />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-3xl font-semibold text-gray-400">
+            <div className="w-full h-full flex items-center justify-center text-4xl font-extrabold text-indigo-300 bg-indigo-50/50">
               {profile.display_name.charAt(0).toUpperCase()}
             </div>
           )}
         </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold text-gray-900">{profile.display_name}</h1>
-            <VerificationBadge level={profile.verification_level} />
+
+        <div className="flex-1 text-center sm:text-left space-y-2 z-10">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap justify-center sm:justify-start">
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">{profile.display_name}</h1>
+              {user && (
+                <SaveButton
+                  targetType="creator"
+                  targetId={profile.id}
+                  initialSaved={initialSaved}
+                />
+              )}
+            </div>
+            <VerificationBadge level={profile.verification_level} className="mt-1 sm:mt-0 shadow-sm" />
           </div>
           {profile.category_name && (
-            <p className="text-sm text-gray-500 mt-0.5">{profile.category_name}</p>
+            <p className="text-sm font-semibold text-indigo-600 tracking-wide uppercase">{profile.category_name}</p>
           )}
-          {location && <p className="text-sm text-gray-400 mt-1">{location}</p>}
-          <div className="mt-2">
+          {location && (
+            <p className="text-sm text-gray-400 flex items-center justify-center sm:justify-start gap-1">
+              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              {location}
+            </p>
+          )}
+          <div className="pt-1">
             <RatingSummary avg={profile.rating_avg} count={profile.rating_count} />
           </div>
         </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 mb-8 text-center text-sm">
-        <div>
-          <p className="font-semibold text-gray-900">{profile.total_orders}</p>
-          <p className="text-gray-500">Orders</p>
+      {/* Trust stats row */}
+      <div className="grid grid-cols-3 gap-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm text-center">
+        <div className="space-y-1">
+          <p className="text-2xl font-black text-indigo-600">{profile.total_orders}</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Orders Done</p>
         </div>
-        <div>
-          <p className="font-semibold text-gray-900">{profile.total_followers}</p>
-          <p className="text-gray-500">Followers</p>
+        <div className="space-y-1 border-x border-gray-100">
+          <p className="text-2xl font-black text-purple-600">{profile.total_followers}</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Followers</p>
         </div>
-        <div>
-          <p className="font-semibold text-gray-900">{profile.rating_count}</p>
-          <p className="text-gray-500">Reviews</p>
+        <div className="space-y-1">
+          <p className="text-2xl font-black text-amber-500">{profile.rating_count}</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Reviews</p>
         </div>
       </div>
 
-      {/* Bio */}
-      {profile.bio && (
-        <section className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">About</h2>
-          <p className="text-gray-600 text-sm leading-relaxed">{profile.bio}</p>
-        </section>
-      )}
-
-      {/* Story */}
-      {profile.story && (
-        <section className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">My Story</h2>
-          <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{profile.story}</p>
-        </section>
-      )}
-
-      {/* Skills */}
-      {profile.skills.length > 0 && (
-        <section className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">Skills</h2>
-          <div className="flex flex-wrap gap-2">
-            {profile.skills.map((skill) => (
-              <span key={skill} className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium border border-gray-200">
-                {skill}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Languages */}
-      {profile.languages.length > 0 && (
-        <section className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">Languages</h2>
-          <div className="flex flex-wrap gap-2">
-            {profile.languages.map((lang) => (
-              <span key={lang} className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-200">
-                {lang}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Reviews Section — Module 12 */}
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">
-          Reviews ({profile.rating_count})
-        </h2>
-        <ReviewList
-          reviews={reviews}
-          viewAs="public"
-          emptyMessage={`${profile.display_name} hasn't received any reviews yet.`}
-          emptyIcon="⭐"
-        />
-      </section>
-
-      {/* Request Custom Order — Module 9 */}
-      {profile.primary_category_id && (
-        <div className="border border-gray-200 rounded-xl p-5 mb-4">
-          <h2 className="text-base font-semibold text-gray-900 mb-1">Request a Custom Order</h2>
-          <p className="text-xs text-gray-500 mb-4">
-            Need something made just for you? Describe your requirements and {profile.display_name} will provide a quote.
-          </p>
-          {user ? (
-            <CustomOrderForm
-              creatorId={profile.id}
-              categoryId={profile.primary_category_id}
-            />
-          ) : (
-            <div className="text-center py-3">
-              <a
-                href={`/login?redirected_from=/creators/${params.slug}`}
-                className="inline-flex items-center rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-500 transition"
-              >
-                Sign in to request custom order
-              </a>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Send Inquiry — Module 8 */}
-      <div className="border-t border-gray-200 pt-6">
-        {user ? (
-          <div>
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Send an Inquiry</h2>
-            <InquiryForm creatorId={profile.id} defaultInquiryType="general" />
-          </div>
-        ) : (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
-            <p className="text-sm font-medium text-gray-700 mb-1">
-              Want to contact {profile.display_name}?
-            </p>
-            <p className="text-xs text-gray-500 mb-4">
-              Sign in or create an account to send an inquiry.
-            </p>
-            <a
-              href={`/login?redirected_from=/creators/${params.slug}`}
-              className="inline-flex items-center rounded-md bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700 transition"
-            >
-              Sign in to send inquiry
-            </a>
-          </div>
-        )}
-      </div>
-
-      {/* Report Section — Module 14 */}
-      <div className="mt-8 flex justify-center">
-        {user ? (
-          <ReportButton targetType="creator" targetId={profile.id} />
-        ) : (
-          <a
-            href={`/login?redirected_from=/creators/${params.slug}`}
-            className="text-xs font-medium text-gray-500 hover:text-gray-900 underline transition"
-          >
-            Sign in to report this creator
-          </a>
-        )}
-      </div>
+      {/* Premium Content Tabs switcher */}
+      <CreatorTabs
+        profile={profile}
+        services={services}
+        shop={shop}
+        portfolioListings={portfolioListings}
+        portfolioMedia={portfolioMedia}
+        reviews={reviews}
+        user={user}
+        collections={collections}
+      />
     </main>
   );
 }

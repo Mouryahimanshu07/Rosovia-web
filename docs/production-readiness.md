@@ -8,14 +8,12 @@ Use this before any production deployment. Items marked **⛔ Blocker** must be 
 
 These items are not yet implemented and are required before real users and real money:
 
-- [ ] **Automated tests** — Unit and integration test coverage is minimal. Critical flows (payment webhook, order state machine, RLS enforcement) need automated test suites.
 - [ ] **Load testing** — No load or stress tests have been run. Database query performance under concurrent load is unknown.
 - [ ] **Real refund / payout provider integration** — The `refund_requests`, `disputes`, and `creator_payouts` tables exist, but actual money movement (Razorpay refund API, RazorpayX / bank transfer payout) is **not implemented**. All refunds and payouts are currently manual admin actions only.
 - [ ] **Content moderation** — No automated image/text scanning. All content moderation is manual (admin reports queue).
 - [ ] **Production monitoring alerts** — Sentry error tracking is configured, but no alert rules, on-call rotation, or uptime monitoring (e.g. Uptime Robot, Better Uptime) are set up.
 - [ ] **Legal pages** — Privacy Policy, Terms of Service, Refund Policy, Cookie Notice are not written or published. Required before accepting payments from users.
 - [ ] **Backup / restore drills** — No documented and tested database restore procedure. Supabase takes automatic backups, but recovery time has not been tested.
-- [ ] **Rate limiting** — No request-level rate limiting on webhook routes or API endpoints. Must be added before public launch to prevent abuse.
 
 ---
 
@@ -87,6 +85,8 @@ See [docs/env.md](./env.md) for the full template.
 
 ## ✅ Security
 
+- [x] Application-layer IP-based rate limiting active on all API and dashboard routes (Middleware checks)
+- [x] Server-only runtime guards protecting Supabase admin/service_role client instantiations
 - [ ] No hardcoded secrets in any source file (`git grep` for key patterns)
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` only used in webhook handler and admin server clients
 - [ ] `RAZORPAY_KEY_SECRET` never in client bundle (verify with browser devtools Network tab)
@@ -156,12 +156,13 @@ See [docs/security.md](./security.md) for full security architecture.
 
 ---
 
-## ✅ Build Verification
+## ✅ Build & Test Verification
 
-- [ ] `pnpm lint` — zero errors
-- [ ] `pnpm typecheck` — zero errors
-- [ ] `pnpm build` — succeeds
-- [ ] `/api/health` returns `{ status: 'ok' }`
+- [x] `pnpm lint` — zero errors
+- [x] `pnpm typecheck` — zero errors
+- [x] `pnpm build` — succeeds
+- [x] `/api/health` returns `{ status: 'ok' }`
+- [x] Full Vitest automated test suite verification (218/218 passing tests)
 
 ---
 

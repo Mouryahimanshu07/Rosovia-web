@@ -11,12 +11,13 @@ import {
   updateListing,
   updateListingStatus,
   listPublicListings,
+  listCreatorPublicListings,
   listCurrentCreatorListings,
   type ListListingsParams,
 } from './listing.repository';
 import type { CreatorProfile } from '@rosovia/core';
 
-export { listPublicListings, listCurrentCreatorListings };
+export { listPublicListings, listCreatorPublicListings, listCurrentCreatorListings };
 
 // ---------------------------------------------------------------------------
 // Internal helpers

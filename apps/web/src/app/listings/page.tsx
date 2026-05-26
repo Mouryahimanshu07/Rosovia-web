@@ -27,6 +27,7 @@ const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
   { value: 'price_low', label: 'Price: Low → High' },
   { value: 'price_high', label: 'Price: High → Low' },
+  { value: 'rating_high', label: 'Top Rated' },
 ];
 
 export default async function PublicListingsPage({ searchParams }: ListingsPageProps) {

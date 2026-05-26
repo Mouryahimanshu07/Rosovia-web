@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createWebServerClient } from '~/lib/supabase/server';
 import { createPaymentForCurrentBuyerOrder } from '@rosovia/api';
-import { createPaymentForOrderSchema } from '@rosovia/core';
+import { createPaymentForOrderSchema, isPaymentsEnabled } from '@rosovia/core';
 import type { CreatePaymentForOrderInput, RazorpayCheckoutData } from '@rosovia/core';
 import { captureAppError } from '~/lib/analytics/capture-error';
 
@@ -20,6 +20,13 @@ type ActionResult<T = undefined> =
 export async function createPaymentForOrderAction(
   input: CreatePaymentForOrderInput
 ): Promise<ActionResult<RazorpayCheckoutData>> {
+  if (!isPaymentsEnabled()) {
+    return {
+      success: false,
+      error: 'Online payment is currently disabled. You can still contact the creator or request a custom order.',
+    };
+  }
+
   const parsed = createPaymentForOrderSchema.safeParse(input);
   if (!parsed.success) {
     return {

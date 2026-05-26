@@ -1,11 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type {
-  Inquiry,
-  InquiryWithDetails,
-  InquiryListParams,
+import {
+  inquiryCreateSchema,
+  inquiryReplySchema,
+  inquiryStatusUpdateSchema,
+  type Inquiry,
+  type InquiryWithDetails,
+  type InquiryListParams,
 } from '@rosovia/core';
 import { getProfileByAuthUserId } from '../profiles/profile.repository';
 import { getCreatorProfileByUserId } from '../creator-profiles/creator-profile.repository';
+import { createSystemNotification } from '../notifications/notification.service';
 import {
   getInquiryById,
   getInquiryForBuyer,
@@ -48,13 +52,16 @@ export async function createCurrentUserInquiry(
     message: string;
   }
 ): Promise<Inquiry> {
+  // Rigorous service-layer input validation
+  const validatedInput = inquiryCreateSchema.parse(input);
+
   const profile = await resolveActiveProfile(supabase);
 
   // Verify target creator exists and is not deleted
   const { data: creatorData, error: creatorError } = await supabase
     .from('creator_profiles')
     .select('id, user_id, deleted_at')
-    .eq('id', input.creatorId)
+    .eq('id', validatedInput.creatorId)
     .is('deleted_at', null)
     .single();
 
@@ -76,11 +83,11 @@ export async function createCurrentUserInquiry(
   }
 
   // If listingId is provided, verify it is approved and belongs to this creator
-  if (input.listingId) {
+  if (validatedInput.listingId) {
     const { data: listing, error: listingError } = await supabase
       .from('listings')
       .select('id, creator_id, status, deleted_at')
-      .eq('id', input.listingId)
+      .eq('id', validatedInput.listingId)
       .is('deleted_at', null)
       .single();
 
@@ -90,7 +97,7 @@ export async function createCurrentUserInquiry(
     if ((listing as { status: string }).status !== 'approved') {
       throw new Error('Inquiries can only be sent for approved listings');
     }
-    if ((listing as { creator_id: string }).creator_id !== input.creatorId) {
+    if ((listing as { creator_id: string }).creator_id !== validatedInput.creatorId) {
       throw new Error('Listing does not belong to the specified creator');
     }
   }
@@ -100,13 +107,28 @@ export async function createCurrentUserInquiry(
     throw new Error('You cannot send an inquiry to yourself');
   }
 
-  return createInquiry(supabase, {
+  const inquiry = await createInquiry(supabase, {
     buyer_id: profile.id,
-    creator_id: input.creatorId,
-    listing_id: input.listingId ?? null,
-    inquiry_type: input.inquiryType,
-    message: input.message,
+    creator_id: validatedInput.creatorId,
+    listing_id: validatedInput.listingId ?? null,
+    inquiry_type: validatedInput.inquiryType,
+    message: validatedInput.message,
   });
+
+  try {
+    await createSystemNotification(supabase, {
+      recipientProfileId: (creatorData as { user_id: string }).user_id,
+      type: 'inquiry_received',
+      title: 'New Inquiry Received',
+      body: `New inquiry of type "${validatedInput.inquiryType}" received from buyer.`,
+      entityType: 'inquiry',
+      entityId: inquiry.id,
+    });
+  } catch (notificationError) {
+    console.error('Failed to send notification for inquiry creation:', notificationError);
+  }
+
+  return inquiry;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,15 +151,18 @@ export async function closeCurrentUserInquiry(
   supabase: SupabaseClient,
   inquiryId: string
 ): Promise<Inquiry> {
+  const { z } = await import('zod');
+  const validatedId = z.string().uuid('Inquiry ID must be a valid UUID').parse(inquiryId);
+
   const profile = await resolveActiveProfile(supabase);
 
-  const inquiry = await getInquiryForBuyer(supabase, inquiryId, profile.id);
+  const inquiry = await getInquiryForBuyer(supabase, validatedId, profile.id);
   if (!inquiry) throw new Error('Inquiry not found');
   if (!['open', 'replied'].includes(inquiry.status)) {
     throw new Error(`Cannot close an inquiry with status "${inquiry.status}"`);
   }
 
-  return updateInquiry(supabase, inquiryId, {
+  return updateInquiry(supabase, validatedId, {
     status: 'closed',
     closed_at: new Date().toISOString(),
   });
@@ -177,20 +202,35 @@ export async function replyToCurrentCreatorInquiry(
   supabase: SupabaseClient,
   input: { inquiryId: string; creatorResponse: string }
 ): Promise<Inquiry> {
+  const validatedInput = inquiryReplySchema.parse(input);
+
   const { creatorProfile } = await resolveActiveCreatorProfile(supabase);
 
-  const inquiry = await getInquiryForCreator(supabase, input.inquiryId, creatorProfile.id);
+  const inquiry = await getInquiryForCreator(supabase, validatedInput.inquiryId, creatorProfile.id);
   if (!inquiry) throw new Error('Inquiry not found');
   if (inquiry.status === 'closed') throw new Error('Cannot reply to a closed inquiry');
   if (inquiry.status === 'spam') throw new Error('Cannot reply to a spam-marked inquiry');
 
-  // Service-layer enforcement: creator cannot change immutable fields
-  // Only creator_response, status, replied_at are updated here.
-  return updateInquiry(supabase, input.inquiryId, {
-    creator_response: input.creatorResponse,
+  const updatedInquiry = await updateInquiry(supabase, validatedInput.inquiryId, {
+    creator_response: validatedInput.creatorResponse,
     status: 'replied',
     replied_at: new Date().toISOString(),
   });
+
+  try {
+    await createSystemNotification(supabase, {
+      recipientProfileId: inquiry.buyer_id,
+      type: 'inquiry_replied',
+      title: 'Inquiry Replied',
+      body: 'The creator has replied to your inquiry.',
+      entityType: 'inquiry',
+      entityId: inquiry.id,
+    });
+  } catch (notificationError) {
+    console.error('Failed to send notification for inquiry reply:', notificationError);
+  }
+
+  return updatedInquiry;
 }
 
 // ---------------------------------------------------------------------------
@@ -201,24 +241,26 @@ export async function updateCurrentCreatorInquiryStatus(
   supabase: SupabaseClient,
   input: { inquiryId: string; status: 'replied' | 'closed' | 'spam' }
 ): Promise<Inquiry> {
+  const validatedInput = inquiryStatusUpdateSchema.parse(input);
+
   const { creatorProfile } = await resolveActiveCreatorProfile(supabase);
 
-  const inquiry = await getInquiryForCreator(supabase, input.inquiryId, creatorProfile.id);
+  const inquiry = await getInquiryForCreator(supabase, validatedInput.inquiryId, creatorProfile.id);
   if (!inquiry) throw new Error('Inquiry not found');
 
   const allowedStatuses = ['replied', 'closed', 'spam'] as const;
-  if (!allowedStatuses.includes(input.status)) {
+  if (!(allowedStatuses as readonly string[]).includes(validatedInput.status)) {
     throw new Error('Invalid status. Creator can set: replied, closed, or spam');
   }
 
   const updateData: Parameters<typeof updateInquiry>[2] = {
-    status: input.status,
+    status: validatedInput.status,
   };
-  if (input.status === 'closed') {
+  if (validatedInput.status === 'closed') {
     updateData.closed_at = new Date().toISOString();
   }
 
-  return updateInquiry(supabase, input.inquiryId, updateData);
+  return updateInquiry(supabase, validatedInput.inquiryId, updateData);
 }
 
 // ---------------------------------------------------------------------------

@@ -22,3 +22,6 @@ export * from './messages';
 export * from './notifications';
 export * from './delivery';
 export * from './payouts';
+export * from './saved-items/saved-item.service';
+export * from './creator-collections/creator-collection.service';
+

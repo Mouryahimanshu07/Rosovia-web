@@ -30,11 +30,14 @@ This document lists all environment variables required to run Rosovia locally an
 
 ---
 
-## Razorpay (Payments)
+## Razorpay (Payments) & Feature Flags
 
 | Variable | Required | Scope | Notes |
 |---|---|---|---|
-| `RAZORPAY_KEY_ID` | ✅ | **Server only** (returned from action) | Razorpay publishable key (e.g. `rzp_test_...` or `rzp_live_...`). Returned from the `createPaymentForOrderAction` server action and passed to the Razorpay Checkout SDK in the browser. |
+| `PAYMENTS_ENABLED` | ✅ | **Server + Core** | Central boolean flag (default: `false`). Disables Razorpay order initialization actions and webhooks if set to `false`. |
+| `LIVE_PAYMENTS_ENABLED` | ✅ | **Server + Core** | Central boolean flag (default: `false`). Selects between Razorpay live production mode and local sandbox testing. |
+| `RAZORPAY_KEY_ID` | ✅ | **Server only** (returned from action) | Razorpay publishable key (e.g. `rzp_test_...` or `rzp_live_...`). Returned from server action and passed to the Razorpay Checkout SDK. |
+| `NEXT_PUBLIC_RAZORPAY_KEY_ID` | ✅ | Browser + Server | The publishable key exposed directly to Next.js browser layout scripts. |
 | `RAZORPAY_KEY_SECRET` | ✅ | **Server only** | Razorpay secret key — used to call the Razorpay Orders API. **Never expose to client.** |
 | `RAZORPAY_WEBHOOK_SECRET` | ✅ | **Server only** | Used to verify HMAC-SHA256 webhook signature. **Never expose to client.** |
 
@@ -81,8 +84,13 @@ CLOUDFLARE_R2_PUBLIC_URL=https://pub-XXXX.r2.dev
 
 # ─── Razorpay ─────────────────────────────────────────────────────────────────
 RAZORPAY_KEY_ID=rzp_test_XXXX
+NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_XXXX
 RAZORPAY_KEY_SECRET=YOUR_RAZORPAY_SECRET
 RAZORPAY_WEBHOOK_SECRET=YOUR_WEBHOOK_SECRET
+
+# ─── Feature Flags ────────────────────────────────────────────────────────────
+PAYMENTS_ENABLED=false
+LIVE_PAYMENTS_ENABLED=false
 
 # ─── Sentry (optional for local) ──────────────────────────────────────────────
 NEXT_PUBLIC_SENTRY_DSN=https://XXXX@oXXXX.ingest.sentry.io/XXXX

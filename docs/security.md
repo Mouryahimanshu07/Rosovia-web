@@ -63,6 +63,8 @@ The Supabase service-role client bypasses RLS entirely. It is **only instantiate
 - Admin server actions that require elevated trust (e.g., atomic moderation RPCs)
 - Admin-facing API routes for private media signed URLs
 
+**Runtime Protection**: Both `createAdminSupabaseClient` and `createAdminSupabaseReadReplicaClient` enforce a strict environment guard (`if (typeof window !== 'undefined')`) that throws a security error immediately if executed inside any client-side browser bundle, protecting against key leaks.
+
 The service-role client is never created in browser-executed code.
 
 ---
@@ -154,10 +156,25 @@ All user-supplied inputs pass through **Zod schemas** before reaching service or
 
 ---
 
+---
+
+## Application-Layer Rate Limiting
+
+To prevent API abuse and DDoS spamming:
+- **Global Middleware Check**: The Next.js edge `middleware.ts` intercepts all `/api/*` and `/dashboard/*` requests.
+- **IP-Based Sliding Rate Limiter**: Requests are evaluated against an IP-based sliding rate limiter (default: 100 requests per minute).
+- **HTTP Quota Headers**: Every response injects standard quota headers:
+  - `X-RateLimit-Limit`: Maximum requests per window.
+  - `X-RateLimit-Remaining`: Available requests in the current window.
+  - `X-RateLimit-Reset`: Time (in milliseconds) when the rate limit resets.
+- **429 Too Many Requests**: Exceeded requests are immediately dropped, returning a 429 status code with a JSON error payload for `/api/*` and a raw text error for `/dashboard/*`.
+
+---
+
 ## Known Limitations & Future Hardening
 
 - **Automated content moderation**: No AI/ML-based content scanning. Currently relies on manual admin review and user reports.
-- **Rate limiting**: No request rate limiting on API routes at the application layer. Relies on Vercel edge network and Supabase connection limits.
+- **Rate limiting scalability**: The application rate limiter currently uses a memory-leak-safe, thread-safe in-memory map. For distributed, multi-instance production deployments, the store should be swapped with a Redis cache (e.g., Upstash Redis) as documented in the codebase.
 - **MFA**: Supabase Auth supports MFA (TOTP) but it is not currently enforced for admin accounts.
 - **CSRF**: Next.js App Router server actions are CSRF-protected by design (same-origin enforcement), but an explicit CSRF token mechanism is not implemented for custom API routes.
 - **Legal / compliance**: Privacy policy, cookie notice, and GDPR/IT Act compliance documentation are not yet in place.

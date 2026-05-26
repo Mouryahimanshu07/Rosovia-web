@@ -1,13 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type {
-  CustomOrder,
-  CustomOrderWithDetails,
-  CustomOrderListParams,
-  CustomOrderCreateInput,
-  CreatorQuoteCustomOrderInput,
+import {
+  customOrderCreateSchema,
+  creatorQuoteCustomOrderSchema,
+  type CustomOrder,
+  type CustomOrderWithDetails,
+  type CustomOrderListParams,
+  type CustomOrderCreateInput,
+  type CreatorQuoteCustomOrderInput,
 } from '@rosovia/core';
 import { getProfileByAuthUserId } from '../profiles/profile.repository';
 import { getCreatorProfileByUserId } from '../creator-profiles/creator-profile.repository';
+import { createSystemNotification } from '../notifications/notification.service';
 import {
   getCustomOrderForBuyer,
   getCustomOrderForCreator,
@@ -63,13 +66,16 @@ export async function createCurrentUserCustomOrder(
   supabase: SupabaseClient,
   input: CustomOrderCreateInput
 ): Promise<CustomOrder> {
+  // Rigorous service-layer input validation
+  const validatedInput = customOrderCreateSchema.parse(input);
+
   const profile = await resolveActiveProfile(supabase);
 
   // Verify target creator exists and is active
   const { data: creatorData, error: creatorError } = await supabase
     .from('creator_profiles')
     .select('id, user_id, deleted_at')
-    .eq('id', input.creatorId)
+    .eq('id', validatedInput.creatorId)
     .is('deleted_at', null)
     .single();
 
@@ -101,7 +107,7 @@ export async function createCurrentUserCustomOrder(
   const { data: category, error: categoryError } = await supabase
     .from('categories')
     .select('id, is_active')
-    .eq('id', input.categoryId)
+    .eq('id', validatedInput.categoryId)
     .single();
 
   if (categoryError || !category) {
@@ -112,12 +118,12 @@ export async function createCurrentUserCustomOrder(
   }
 
   // Validate listing if provided
-  let resolvedCategoryId = input.categoryId;
-  if (input.listingId) {
+  let resolvedCategoryId = validatedInput.categoryId;
+  if (validatedInput.listingId) {
     const { data: listing, error: listingError } = await supabase
       .from('listings')
       .select('id, creator_id, status, deleted_at, category_id')
-      .eq('id', input.listingId)
+      .eq('id', validatedInput.listingId)
       .is('deleted_at', null)
       .single();
 
@@ -128,7 +134,7 @@ export async function createCurrentUserCustomOrder(
     if (listingRow.status !== 'approved') {
       throw new Error('Custom orders can only be sent for approved listings');
     }
-    if (listingRow.creator_id !== input.creatorId) {
+    if (listingRow.creator_id !== validatedInput.creatorId) {
       throw new Error('Listing does not belong to the specified creator');
     }
     // Use listing's category if provided category was not explicit
@@ -138,11 +144,11 @@ export async function createCurrentUserCustomOrder(
   }
 
   // Validate reference media if provided: must belong to the buyer
-  if (input.referenceMediaId) {
+  if (validatedInput.referenceMediaId) {
     const { data: media, error: mediaError } = await supabase
       .from('media_assets')
       .select('id, owner_id')
-      .eq('id', input.referenceMediaId)
+      .eq('id', validatedInput.referenceMediaId)
       .single();
 
     if (mediaError || !media) {
@@ -153,20 +159,35 @@ export async function createCurrentUserCustomOrder(
     }
   }
 
-  return createCustomOrder(supabase, {
+  const order = await createCustomOrder(supabase, {
     buyer_id: profile.id,
-    creator_id: input.creatorId,
-    listing_id: input.listingId ?? null,
+    creator_id: validatedInput.creatorId,
+    listing_id: validatedInput.listingId ?? null,
     category_id: resolvedCategoryId,
-    title: input.title,
-    description: input.description,
-    reference_media_id: input.referenceMediaId ?? null,
-    budget_min: input.budgetMin ?? null,
-    budget_max: input.budgetMax ?? null,
-    deadline: input.deadline ?? null,
-    delivery_city: input.deliveryCity ?? null,
-    delivery_state: input.deliveryState ?? null,
+    title: validatedInput.title,
+    description: validatedInput.description,
+    reference_media_id: validatedInput.referenceMediaId ?? null,
+    budget_min: validatedInput.budgetMin ?? null,
+    budget_max: validatedInput.budgetMax ?? null,
+    deadline: validatedInput.deadline ?? null,
+    delivery_city: validatedInput.deliveryCity ?? null,
+    delivery_state: validatedInput.deliveryState ?? null,
   });
+
+  try {
+    await createSystemNotification(supabase, {
+      recipientProfileId: creatorRecord.user_id,
+      type: 'custom_order_received',
+      title: 'New Custom Order Request',
+      body: `New custom order request: "${validatedInput.title}".`,
+      entityType: 'custom_order',
+      entityId: order.id,
+    });
+  } catch (notificationError) {
+    console.error('Failed to send notification for custom order creation:', notificationError);
+  }
+
+  return order;
 }
 
 // ---------------------------------------------------------------------------
@@ -189,9 +210,12 @@ export async function acceptCurrentBuyerCustomOrderQuote(
   supabase: SupabaseClient,
   customOrderId: string
 ): Promise<CustomOrder> {
+  const { z } = await import('zod');
+  const validatedId = z.string().uuid('Custom order ID must be a valid UUID').parse(customOrderId);
+
   const profile = await resolveActiveProfile(supabase);
 
-  const order = await getCustomOrderForBuyer(supabase, customOrderId, profile.id);
+  const order = await getCustomOrderForBuyer(supabase, validatedId, profile.id);
   if (!order) throw new Error('Custom order not found');
   if (order.status !== 'quoted') {
     throw new Error('You can only accept a quote when the order status is "quoted"');
@@ -200,7 +224,32 @@ export async function acceptCurrentBuyerCustomOrderQuote(
     throw new Error('Creator has not provided a quote amount yet');
   }
 
-  return updateCustomOrder(supabase, customOrderId, { status: 'accepted' });
+  const updated = await updateCustomOrder(supabase, validatedId, { status: 'accepted' });
+
+  // Notify creator
+  try {
+    const { data: cp } = await supabase
+      .from('creator_profiles')
+      .select('user_id')
+      .eq('id', order.creator_id)
+      .single();
+    const creatorProfileId = cp?.user_id;
+
+    if (creatorProfileId) {
+      await createSystemNotification(supabase, {
+        recipientProfileId: creatorProfileId,
+        type: 'custom_order_status_changed',
+        title: 'Custom Quote Accepted',
+        body: `Buyer accepted your quote for custom order "${order.title}".`,
+        entityType: 'custom_order',
+        entityId: order.id,
+      });
+    }
+  } catch (notificationError) {
+    console.error('Failed to send notification for custom order quote acceptance:', notificationError);
+  }
+
+  return updated;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,9 +260,12 @@ export async function cancelCurrentBuyerCustomOrder(
   supabase: SupabaseClient,
   customOrderId: string
 ): Promise<CustomOrder> {
+  const { z } = await import('zod');
+  const validatedId = z.string().uuid('Custom order ID must be a valid UUID').parse(customOrderId);
+
   const profile = await resolveActiveProfile(supabase);
 
-  const order = await getCustomOrderForBuyer(supabase, customOrderId, profile.id);
+  const order = await getCustomOrderForBuyer(supabase, validatedId, profile.id);
   if (!order) throw new Error('Custom order not found');
 
   const cancellableStatuses: string[] = ['requested', 'creator_reviewing', 'quoted'];
@@ -221,7 +273,32 @@ export async function cancelCurrentBuyerCustomOrder(
     throw new Error(`Cannot cancel a custom order with status "${order.status}"`);
   }
 
-  return updateCustomOrder(supabase, customOrderId, { status: 'cancelled' });
+  const updated = await updateCustomOrder(supabase, validatedId, { status: 'cancelled' });
+
+  // Notify creator
+  try {
+    const { data: cp } = await supabase
+      .from('creator_profiles')
+      .select('user_id')
+      .eq('id', order.creator_id)
+      .single();
+    const creatorProfileId = cp?.user_id;
+
+    if (creatorProfileId) {
+      await createSystemNotification(supabase, {
+        recipientProfileId: creatorProfileId,
+        type: 'custom_order_status_changed',
+        title: 'Custom Order Cancelled',
+        body: `Buyer cancelled the custom order "${order.title}".`,
+        entityType: 'custom_order',
+        entityId: order.id,
+      });
+    }
+  } catch (notificationError) {
+    console.error('Failed to send notification for custom order cancellation as buyer:', notificationError);
+  }
+
+  return updated;
 }
 
 // ---------------------------------------------------------------------------
@@ -244,15 +321,34 @@ export async function markCurrentCreatorCustomOrderReviewing(
   supabase: SupabaseClient,
   customOrderId: string
 ): Promise<CustomOrder> {
+  const { z } = await import('zod');
+  const validatedId = z.string().uuid('Custom order ID must be a valid UUID').parse(customOrderId);
+
   const { creatorProfile } = await resolveActiveCreatorProfile(supabase);
 
-  const order = await getCustomOrderForCreator(supabase, customOrderId, creatorProfile.id);
+  const order = await getCustomOrderForCreator(supabase, validatedId, creatorProfile.id);
   if (!order) throw new Error('Custom order not found');
   if (order.status !== 'requested') {
     throw new Error('Can only mark an order as reviewing when it is in "requested" status');
   }
 
-  return updateCustomOrder(supabase, customOrderId, { status: 'creator_reviewing' });
+  const updated = await updateCustomOrder(supabase, validatedId, { status: 'creator_reviewing' });
+
+  // Notify buyer
+  try {
+    await createSystemNotification(supabase, {
+      recipientProfileId: order.buyer_id,
+      type: 'custom_order_status_changed',
+      title: 'Custom Order Status Updated',
+      body: `Custom order "${order.title}" status changed to "creator_reviewing".`,
+      entityType: 'custom_order',
+      entityId: order.id,
+    });
+  } catch (notificationError) {
+    console.error('Failed to send notification for custom order mark reviewing:', notificationError);
+  }
+
+  return updated;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,9 +359,11 @@ export async function quoteCurrentCreatorCustomOrder(
   supabase: SupabaseClient,
   input: CreatorQuoteCustomOrderInput
 ): Promise<CustomOrder> {
+  const validatedInput = creatorQuoteCustomOrderSchema.parse(input);
+
   const { creatorProfile } = await resolveActiveCreatorProfile(supabase);
 
-  const order = await getCustomOrderForCreator(supabase, input.customOrderId, creatorProfile.id);
+  const order = await getCustomOrderForCreator(supabase, validatedInput.customOrderId, creatorProfile.id);
   if (!order) throw new Error('Custom order not found');
 
   const quotableStatuses: string[] = ['requested', 'creator_reviewing'];
@@ -273,11 +371,27 @@ export async function quoteCurrentCreatorCustomOrder(
     throw new Error(`Cannot quote a custom order with status "${order.status}"`);
   }
 
-  return updateCustomOrder(supabase, input.customOrderId, {
+  const updated = await updateCustomOrder(supabase, validatedInput.customOrderId, {
     status: 'quoted',
-    creator_quote_amount: input.creatorQuoteAmount,
-    creator_quote_note: input.creatorQuoteNote ?? null,
+    creator_quote_amount: validatedInput.creatorQuoteAmount,
+    creator_quote_note: validatedInput.creatorQuoteNote ?? null,
   });
+
+  // Notify buyer
+  try {
+    await createSystemNotification(supabase, {
+      recipientProfileId: order.buyer_id,
+      type: 'custom_order_status_changed',
+      title: 'Custom Order Quoted',
+      body: `Custom order "${order.title}" has been quoted at $${validatedInput.creatorQuoteAmount}.`,
+      entityType: 'custom_order',
+      entityId: order.id,
+    });
+  } catch (notificationError) {
+    console.error('Failed to send notification for custom order quote submission:', notificationError);
+  }
+
+  return updated;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,9 +402,12 @@ export async function rejectCurrentCreatorCustomOrder(
   supabase: SupabaseClient,
   customOrderId: string
 ): Promise<CustomOrder> {
+  const { z } = await import('zod');
+  const validatedId = z.string().uuid('Custom order ID must be a valid UUID').parse(customOrderId);
+
   const { creatorProfile } = await resolveActiveCreatorProfile(supabase);
 
-  const order = await getCustomOrderForCreator(supabase, customOrderId, creatorProfile.id);
+  const order = await getCustomOrderForCreator(supabase, validatedId, creatorProfile.id);
   if (!order) throw new Error('Custom order not found');
 
   const rejectableStatuses: string[] = ['requested', 'creator_reviewing', 'quoted'];
@@ -298,7 +415,23 @@ export async function rejectCurrentCreatorCustomOrder(
     throw new Error(`Cannot reject a custom order with status "${order.status}"`);
   }
 
-  return updateCustomOrder(supabase, customOrderId, { status: 'rejected' });
+  const updated = await updateCustomOrder(supabase, validatedId, { status: 'rejected' });
+
+  // Notify buyer
+  try {
+    await createSystemNotification(supabase, {
+      recipientProfileId: order.buyer_id,
+      type: 'custom_order_status_changed',
+      title: 'Custom Order Rejected',
+      body: `Creator has rejected your request for custom order "${order.title}".`,
+      entityType: 'custom_order',
+      entityId: order.id,
+    });
+  } catch (notificationError) {
+    console.error('Failed to send notification for custom order rejection:', notificationError);
+  }
+
+  return updated;
 }
 
 // ---------------------------------------------------------------------------
@@ -309,9 +442,12 @@ export async function cancelCurrentCreatorCustomOrder(
   supabase: SupabaseClient,
   customOrderId: string
 ): Promise<CustomOrder> {
+  const { z } = await import('zod');
+  const validatedId = z.string().uuid('Custom order ID must be a valid UUID').parse(customOrderId);
+
   const { creatorProfile } = await resolveActiveCreatorProfile(supabase);
 
-  const order = await getCustomOrderForCreator(supabase, customOrderId, creatorProfile.id);
+  const order = await getCustomOrderForCreator(supabase, validatedId, creatorProfile.id);
   if (!order) throw new Error('Custom order not found');
 
   const cancellableStatuses: string[] = ['requested', 'creator_reviewing', 'quoted'];
@@ -319,7 +455,23 @@ export async function cancelCurrentCreatorCustomOrder(
     throw new Error(`Cannot cancel a custom order with status "${order.status}"`);
   }
 
-  return updateCustomOrder(supabase, customOrderId, { status: 'cancelled' });
+  const updated = await updateCustomOrder(supabase, validatedId, { status: 'cancelled' });
+
+  // Notify buyer
+  try {
+    await createSystemNotification(supabase, {
+      recipientProfileId: order.buyer_id,
+      type: 'custom_order_status_changed',
+      title: 'Custom Order Cancelled',
+      body: `Creator cancelled the custom order "${order.title}".`,
+      entityType: 'custom_order',
+      entityId: order.id,
+    });
+  } catch (notificationError) {
+    console.error('Failed to send notification for custom order cancellation as creator:', notificationError);
+  }
+
+  return updated;
 }
 
 // Re-export raw read helpers for SSR pages

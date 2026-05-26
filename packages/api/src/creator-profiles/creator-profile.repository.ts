@@ -38,10 +38,13 @@ export async function getCreatorProfileBySlug(
     .from('creator_profiles')
     .select(`
       *,
-      categories ( name, slug )
+      categories ( name, slug ),
+      profiles!inner ( status, deleted_at )
     `)
     .eq('slug', slug)
     .is('deleted_at', null)
+    .eq('profiles.status', 'active')
+    .is('profiles.deleted_at', null)
     .single();
 
   if (error) {

@@ -1,5 +1,30 @@
 # Payments — Rosovia
 
+> [!WARNING]
+> **Online payments are currently disabled in the MVP (`PAYMENTS_ENABLED=false`).**
+> Buyers can still view listings, inquire, request custom orders, and prepare orders, but direct online payments via Razorpay are currently blocked.
+
+---
+
+## Central Payment-Disabled Architecture
+
+To support safe sandbox testing, early launches, and custom escrow preparation without live monetary risk, Rosovia implements a central, monorepo-wide **Payment Disabling Gate**:
+
+### 1. Central Configuration Properties
+- `PAYMENTS_ENABLED` (boolean): Controls whether payment options are exposed globally and whether standard Razorpay order initialization actions are permitted.
+- `LIVE_PAYMENTS_ENABLED` (boolean): If payments are enabled, this decides whether they use the live gateway or Razorpay's simulated sandbox test environment.
+- Config helpers (`isPaymentsEnabled()` and `isLivePaymentsEnabled()`) are defined as strictly typed core utilities inside `packages/core/src/config/payment.ts` and re-exported globally.
+
+### 2. Gated Server Actions & Webhooks
+- **Payment Creation Gate**: The `createPaymentForCurrentBuyerOrder()` service function and `createPaymentAction` server action immediately evaluate `isPaymentsEnabled()`. If set to `false`, they halt execution and throw a friendly, descriptive error: `"Online payment is currently disabled. Custom orders and negotiations are fully functional, but direct checkouts are temporarily held."`
+- **Webhook Gate**: The Razorpay POST webhook route handler (`/api/webhooks/razorpay`) immediately exits with a `400 Bad Request` and `Payments are disabled` payload if the flag is disabled.
+
+### 3. Graceful UI Hiding & Custom Order Re-routing
+- **Fulfillment Redirection**: Buttons like "Pay Now" on standard listing cards and order details pages are dynamically replaced or accompanied by clean descriptive banners notifying buyers that credit card/online checkouts are temporarily locked.
+- **Custom Negociation Escape Hatch**: The entire custom order negotiation flow remains 100% operational:
+  `requested → creator_reviewing → quoted → accepted`
+  This permits buyers and creators to discuss specifications, timelines, and agree on quotes, and automatically creates a persistent order on quote acceptance, leaving it perfectly primed for Phase 2 automated escrow execution.
+
 ## Overview
 
 Rosovia integrates with **Razorpay** for payment processing. The Razorpay webhook is the authoritative source of truth for all payment state changes — the client never directly marks a payment as paid.

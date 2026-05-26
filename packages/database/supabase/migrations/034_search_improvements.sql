@@ -282,6 +282,7 @@ as $$
       cp.display_name            as creator_display_name,
       cp.slug                    as creator_slug,
       cp.is_verified             as creator_is_verified,
+      cp.rating_avg              as rating_avg,
       cat.name                   as category_name,
       coalesce(ls.trending_score, 0) as t_score,
 
@@ -406,7 +407,7 @@ as $$
   order by
     case when p_sort = 'price_low'   then b.price end asc  nulls last,
     case when p_sort = 'price_high'  then b.price end desc nulls last,
-    case when p_sort = 'rating_high' then b.r_score end desc nulls last,
+    case when p_sort = 'rating_high' then b.rating_avg end desc nulls last,
     -- Default / relevance / trending: use blended_score
     case
       when p_sort not in ('price_low', 'price_high', 'rating_high') then

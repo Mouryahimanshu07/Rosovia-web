@@ -21,6 +21,7 @@ import {
   markMessagesAsRead,
   updateConversationLastMessageAt,
 } from './message.repository';
+import { createSystemNotification } from '../notifications/notification.service';
 
 // ---------------------------------------------------------------------------
 // Internal Helper: resolve active authenticated profile
@@ -202,26 +203,93 @@ export async function sendCurrentUserMessage(
 
   // Verify participation
   let isParticipant = conversation.buyer_id === profile.id;
-  if (!isParticipant) {
-    const creatorProfile = await getCreatorProfileByUserId(supabase, profile.id);
-    if (creatorProfile && conversation.creator_id === creatorProfile.id) {
-      isParticipant = true;
-    }
+  let isCreatorParticipant = false;
+  let creatorProfileId: string | null = null;
+
+  const creatorProfile = await getCreatorProfileByUserId(supabase, profile.id);
+  if (creatorProfile && conversation.creator_id === creatorProfile.id) {
+    isParticipant = true;
+    isCreatorParticipant = true;
+    creatorProfileId = creatorProfile.id;
   }
 
   if (!isParticipant) {
     throw new Error('You are not authorized to post in this conversation');
   }
 
-  // 2. Create the message
+  // 2. Validate that the target recipient is active (not suspended or deleted)
+  let recipientProfileId: string | null = null;
+  if (profile.id === conversation.buyer_id) {
+    // Current user is buyer, recipient is creator
+    const { data: creatorData, error: creatorError } = await supabase
+      .from('creator_profiles')
+      .select('id, user_id, deleted_at')
+      .eq('id', conversation.creator_id)
+      .is('deleted_at', null)
+      .single();
+
+    if (creatorError || !creatorData) {
+      throw new Error('Recipient creator not found or unavailable');
+    }
+
+    const { data: creatorBaseProfile, error: baseProfileError } = await supabase
+      .from('profiles')
+      .select('id, status, deleted_at')
+      .eq('id', creatorData.user_id)
+      .eq('status', 'active')
+      .is('deleted_at', null)
+      .single();
+
+    if (baseProfileError || !creatorBaseProfile || creatorBaseProfile.status !== 'active') {
+      throw new Error('Recipient creator is not currently active');
+    }
+
+    recipientProfileId = creatorData.user_id;
+  } else {
+    // Current user is creator, recipient is buyer
+    const { data: buyerProfile, error: buyerError } = await supabase
+      .from('profiles')
+      .select('id, status, deleted_at')
+      .eq('id', conversation.buyer_id)
+      .eq('status', 'active')
+      .is('deleted_at', null)
+      .single();
+
+    if (buyerError || !buyerProfile || buyerProfile.status !== 'active') {
+      throw new Error('Recipient buyer is not currently active');
+    }
+
+    recipientProfileId = conversation.buyer_id;
+  }
+
+  // 3. Create the message
   const createdMsg = await createMessage(supabase, {
     conversation_id: input.conversationId,
     sender_profile_id: profile.id,
     body: input.body,
   });
 
-  // 3. Update the conversation last_message_at timestamp
+  // 4. Update the conversation last_message_at timestamp
   await updateConversationLastMessageAt(supabase, input.conversationId, createdMsg.created_at);
+
+  // 5. Dispatch message_received notification with transaction-safe try/catch
+  try {
+    if (recipientProfileId) {
+      const truncatedBody =
+        input.body.length > 60 ? `${input.body.substring(0, 60)}...` : input.body;
+
+      await createSystemNotification(supabase, {
+        recipientProfileId,
+        type: 'message_received',
+        title: 'New Message Received',
+        body: truncatedBody,
+        entityType: 'conversation',
+        entityId: conversation.id,
+      });
+    }
+  } catch (notificationError) {
+    console.error('Failed to send notification for message sent:', notificationError);
+  }
 
   return createdMsg;
 }

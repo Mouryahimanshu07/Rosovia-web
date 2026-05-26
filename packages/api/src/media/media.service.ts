@@ -17,6 +17,7 @@ import {
 export {
   getMediaAssetById,
   listMediaByOwnerId,
+  listCreatorPublicPortfolioMedia,
   listMediaByListingId,
   updateMediaAsset,
 } from './media.repository';

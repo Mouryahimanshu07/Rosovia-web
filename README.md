@@ -123,6 +123,20 @@ All migrations are in `packages/database/supabase/migrations/`.
 | `025_messaging.sql` | `messages` table, conversation threading, RLS |
 | `026_notifications.sql` | `notifications` table, event-driven notification system, RLS |
 | `027_delivery_confirmation.sql` | `order_deliveries` table, delivery tracking, auto-sync trigger, RLS |
+| `028_critical_rpc_fixes.sql` | SQL triggers and RLS repairs for security stability |
+| `029_security_atomicity_fixes.sql` | Handled critical transaction boundaries |
+| `030_security_audit_fixes.sql` | Immutable audit log protections and atomic status modifications |
+| `031_payment_flow_fixes.sql` | Corrected Razorpay webhook status transition errors |
+| `032_operational_simplification.sql` | Pruned legacy, unneeded analytics dependencies |
+| `033_milestone_gates.sql` | Configured gates for custom order timelines |
+| `034_search_improvements.sql` | Full-text stemmed English search plus GIN trigram indexes |
+| `035_marketplace_kpis.sql` | Database views monitoring daily sales and active listings |
+| `036_profiles_public_select_policy.sql` | RLS SELECT policy ensuring active user profile public visibility |
+| `037_saved_items.sql` | `saved_listings` and `saved_creators` tables for bookmarking |
+| `038_creator_collections.sql` | `creator_collections` and `collection_items` for creator showcases |
+| `039_notifications_hardening.sql` | Secure database policies for persistent user alerts |
+| `040_search_sorting_fixes.sql` | Corrected Postgres search average rating sorting logic |
+| `041_search_trust_fields.sql` | Added creator verification and rating metrics returns to search RPC |
 
 > **Apply order matters.** Always apply migrations in numeric order from 001 to the latest.
 
@@ -136,7 +150,7 @@ All migrations are in `packages/database/supabase/migrations/`.
 - ✅ **Step 6: Creator Profile** — `creator_profiles` table, onboarding, edit, public profile pages, slug generation, verification badge, rating summary.
 - ✅ **Step 7: Listings** — `listings` table, 6 listing types, draft/pending/approved/archived status flow, creator dashboard, public `/listings` and `/listings/[slug]`.
 - ✅ **Step 8: Media Upload** — `media_assets`, Cloudflare R2 integration, presigned PUT URL flow, file validation, public/private media separation, signed admin read URLs, protected columns.
-- ✅ **Step 9: Explore / Search** — PostgreSQL ILIKE + trigram index search, query-param filters, pagination across `/explore`, `/categories`, `/listings`, `/creators`.
+- ✅ **Step 9: Explore / Search** — PostgreSQL ILIKE + GIN trigram index search, query-param filters, pagination across `/explore`, `/categories`, `/listings`, `/creators`.
 - ✅ **Step 10: Inquiry System** — `inquiries` table, buyer/creator dashboards, inquiry form on creator and listing pages.
 - ✅ **Step 11: Custom Orders** — `custom_orders` table, full status flow (requested → quoted → accepted), buyer/creator dashboards.
 - ✅ **Step 12: Orders** — `orders` + `order_status_history`, order creation from listings and custom orders, fulfillment status flow, buyer/creator dashboards and detail pages.
@@ -148,8 +162,8 @@ All migrations are in `packages/database/supabase/migrations/`.
 - ✅ **Step 18: Analytics & Monitoring** — PostHog analytics (browser-only), Sentry error tracking (client/server/edge), `/api/health` endpoint.
 - ✅ **Step 19: Security Hardening** — `is_admin()` helper, atomic RPC wrappers, enhanced RLS guards, media column protection.
 - ✅ **Step 20: Messaging** — `messages` table, real-time conversation threading, buyer/creator message dashboards.
-- ✅ **Step 21: Notifications** — `notifications` table, event-driven system, per-user notification inbox.
-- ✅ **Step 22: Delivery, Refunds, Disputes, Payouts (Foundation)** — `order_deliveries` table with auto-sync trigger; `refund_requests`, `disputes`, `creator_payouts` tables; TypeScript types/validators/services; buyer/admin/creator dashboard pages. Payout and refund automation requires future payment provider integration.
+- ✅ **Step 21: Notifications** — `notifications` table, event-driven system, per-user notification inbox, notification bell in header.
+- ✅ **Step 22: Deliveries, Bookmarks, Showcases, Security Hardening, and Rate-Limiting** — Completed order deliveries tracking and triggers; implemented saved items bookmarks and creator showcases; hardened message security and inquiry/custom order validations; wired persistent notifications bell; surfaced ratings and verification badges; optimized PostgreSQL search average rating sorting and RPC trust returns; integrated application-layer IP-based rate-limiting middleware (100 requests/minute) with standard HTTP quota headers; verified everything with a comprehensive automated Vitest test suite (**218 passing tests**) and Next.js production builds.
 
 ---
 
@@ -169,9 +183,10 @@ All migrations are in `packages/database/supabase/migrations/`.
 | [docs/analytics-monitoring.md](./docs/analytics-monitoring.md) | PostHog + Sentry setup |
 | [docs/verification.md](./docs/verification.md) | Creator verification workflow |
 | [docs/authentication.md](./docs/authentication.md) | Auth flows, middleware, session management |
+| [docs/feature-roadmap.md](./docs/feature-roadmap.md) | Roadmap for MVP and future platform expansion |
 
 ---
 
 ## Production Status
 
-**Rosovia is not yet production-ready.** See [`docs/production-readiness.md`](./docs/production-readiness.md) for the full checklist of remaining blockers before any production deployment.
+**Rosovia is ready for staging and pre-production release.** See [`docs/production-readiness.md`](./docs/production-readiness.md) for the checklist of remaining platform tasks (load testing, Sentry routing alerts) before public live launch.

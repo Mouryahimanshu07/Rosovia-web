@@ -2,6 +2,10 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { getDatabaseClients } from '@rosovia/integrations';
 
 export function createAdminSupabaseClient(): SupabaseClient {
+  if (typeof window !== 'undefined') {
+    throw new Error('Security Error: createAdminSupabaseClient must only be called server-side!');
+  }
+
   const { master } = getDatabaseClients();
   if (!master) {
     throw new Error(
@@ -12,6 +16,10 @@ export function createAdminSupabaseClient(): SupabaseClient {
 }
 
 export function createAdminSupabaseReadReplicaClient(): SupabaseClient {
+  if (typeof window !== 'undefined') {
+    throw new Error('Security Error: createAdminSupabaseReadReplicaClient must only be called server-side!');
+  }
+
   const { replica } = getDatabaseClients();
   if (!replica) {
     throw new Error(

@@ -1,12 +1,22 @@
 import Link from 'next/link';
+import { Bell } from 'lucide-react';
 import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile, getDashboardRedirectPath } from '@rosovia/api';
+import { getCurrentProfile, getDashboardRedirectPath, getUnreadCountForCurrentUser } from '@rosovia/api';
 
 export async function AppHeader() {
   const supabase = createWebServerClient();
   const profile = await getCurrentProfile(supabase);
 
   const dashboardPath = profile ? getDashboardRedirectPath(profile.role) : null;
+
+  let unreadCount = 0;
+  if (profile) {
+    try {
+      unreadCount = await getUnreadCountForCurrentUser(supabase);
+    } catch (e) {
+      console.error('Failed to fetch unread notification count:', e);
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/70">
@@ -30,6 +40,20 @@ export async function AppHeader() {
 
           {profile && dashboardPath ? (
             <>
+              <Link
+                href="/dashboard/notifications"
+                className="relative flex h-8 w-8 items-center justify-center rounded-full text-gray-600 hover:bg-gray-50 hover:text-gray-950 transition-all duration-200"
+                title="Notifications"
+                id="header-notification-bell"
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white ring-2 ring-white animate-pulse">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </Link>
+
               <Link
                 href={dashboardPath}
                 className="text-gray-600 hover:text-gray-950"
@@ -66,4 +90,4 @@ export async function AppHeader() {
       </div>
     </header>
   );
-}
+}

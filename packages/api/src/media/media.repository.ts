@@ -49,6 +49,24 @@ export async function listMediaByOwnerId(
   return (data ?? []) as MediaAsset[];
 }
 
+export async function listCreatorPublicPortfolioMedia(
+  supabase: SupabaseClient,
+  ownerId: string
+): Promise<MediaAsset[]> {
+  const { data, error } = await supabase
+    .from('media_assets')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .eq('is_private', false)
+    .in('status', ['uploaded', 'ready'])
+    .is('deleted_at', null)
+    .is('listing_id', null)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Failed to list creator public portfolio media: ${error.message}`);
+  return (data ?? []) as MediaAsset[];
+}
+
 export async function listMediaByListingId(
   supabase: SupabaseClient,
   listingId: string

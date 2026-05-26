@@ -22,6 +22,13 @@ const buyerActions = [
     primary: false,
   },
   {
+    title: 'Saved Items',
+    description: 'View and manage your saved listings and creators.',
+    href: '/dashboard/buyer/saved',
+    icon: '❤️',
+    primary: false,
+  },
+  {
     title: 'My Orders',
     description: 'Track payments, delivery status, and completed purchases.',
     href: '/dashboard/buyer/orders',

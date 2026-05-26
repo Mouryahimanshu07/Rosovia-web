@@ -7,6 +7,7 @@ import type {
   CreatorSearchParams,
   CategorySearchParams,
   PaginatedResult,
+  VerificationLevel,
 } from '@rosovia/core';
 
 const PAGE_SIZE = 12;
@@ -26,7 +27,14 @@ export interface RankedSearchParams extends ListingSearchParams {
 function flattenListingRow(
   row: ListingWithDetails & {
     categories?: { name: string } | null;
-    creator_profiles?: { display_name: string; slug: string } | null;
+    creator_profiles?: {
+      display_name: string;
+      slug: string;
+      is_verified?: boolean;
+      verification_level?: VerificationLevel;
+      rating_avg?: number;
+      rating_count?: number;
+    } | null;
   }
 ): ListingWithDetails {
   return {
@@ -34,6 +42,10 @@ function flattenListingRow(
     category_name: (row.categories as { name: string } | null)?.name ?? row.category_name ?? null,
     creator_display_name: (row.creator_profiles as { display_name: string; slug: string } | null)?.display_name ?? row.creator_display_name ?? null,
     creator_slug: (row.creator_profiles as { display_name: string; slug: string } | null)?.slug ?? row.creator_slug ?? null,
+    creator_is_verified: row.creator_profiles?.is_verified ?? false,
+    creator_verification_level: row.creator_profiles?.verification_level ?? 'none',
+    creator_rating_avg: row.creator_profiles?.rating_avg ?? 0,
+    creator_rating_count: row.creator_profiles?.rating_count ?? 0,
   };
 }
 
@@ -99,7 +111,7 @@ export async function searchApprovedListings(
   // Single data query — no separate count query
   let dataQuery = supabase
     .from('listings')
-    .select('*, categories(name), creator_profiles!inner(display_name, slug, deleted_at, profiles!inner(status, deleted_at))')
+    .select('*, categories(name), creator_profiles!inner(display_name, slug, is_verified, verification_level, rating_avg, rating_count, deleted_at, profiles!inner(status, deleted_at))')
     .eq('status', 'approved')
     .is('deleted_at', null)
     .is('creator_profiles.deleted_at', null)
@@ -257,7 +269,7 @@ async function searchListingsFallback(
 
   let dataQuery = supabase
     .from('listings')
-    .select('*, categories(name), creator_profiles!inner(display_name, slug, deleted_at, profiles!inner(status, deleted_at))')
+    .select('*, categories(name), creator_profiles!inner(display_name, slug, is_verified, verification_level, rating_avg, rating_count, deleted_at, profiles!inner(status, deleted_at))')
     .eq('status', 'approved')
     .is('deleted_at', null)
     .is('creator_profiles.deleted_at', null)

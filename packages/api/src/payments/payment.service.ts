@@ -5,7 +5,7 @@ import type {
   RazorpayWebhookEvent,
   CreatePaymentForOrderInput,
 } from '@rosovia/core';
-import { razorpayWebhookEventSchema } from '@rosovia/core';
+import { razorpayWebhookEventSchema, isPaymentsEnabled } from '@rosovia/core';
 import { createRazorpayOrder, getRazorpayKeyId } from '@rosovia/integrations';
 import { verifyRazorpayWebhookSignature, getRazorpayWebhookSecret } from '@rosovia/integrations';
 import { getProfileByAuthUserId } from '../profiles/profile.repository';
@@ -50,6 +50,10 @@ export async function createPaymentForCurrentBuyerOrder(
   supabase: SupabaseClient,
   input: CreatePaymentForOrderInput
 ): Promise<RazorpayCheckoutData> {
+  if (!isPaymentsEnabled()) {
+    throw new Error('Online payment is currently disabled. You can still contact the creator or request a custom order.');
+  }
+
   const profile = await resolveActiveProfile(supabase);
 
   // Fetch and validate the order

@@ -10,7 +10,11 @@ export type NotificationType =
   | 'message_received'
   | 'review_received'
   | 'verification_updated'
-  | 'admin_action';
+  | 'admin_action'
+  | 'inquiry_received'
+  | 'inquiry_replied'
+  | 'custom_order_received'
+  | 'custom_order_status_changed';
 
 export type NotificationEntityType =
   | 'order'
@@ -22,7 +26,9 @@ export type NotificationEntityType =
   | 'verification_request'
   | 'listing'
   | 'creator'
-  | 'user';
+  | 'user'
+  | 'inquiry'
+  | 'custom_order';
 
 export interface Notification {
   id: string;

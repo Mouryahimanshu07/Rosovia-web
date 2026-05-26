@@ -6,6 +6,7 @@ import { DashboardShell } from '@rosovia/ui';
 import { OrderCard } from '~/components/order/order-card';
 import { OrderActions } from '~/components/order/order-actions';
 import { PayNowButton } from '~/components/payment/pay-now-button';
+import { isPaymentsEnabled } from '@rosovia/core';
 
 export const metadata: Metadata = {
   title: 'My Orders — Rosovia',
@@ -68,11 +69,16 @@ export default async function BuyerOrdersPage() {
                 viewAs="buyer"
                 actions={
                   <div className="flex items-center gap-2 flex-wrap">
-                    {isPayable && (
+                    {isPayable && isPaymentsEnabled() && (
                       <PayNowButton
                         orderId={order.id}
                         amountDisplay={formatAmount(order.amount, order.currency)}
                       />
+                    )}
+                    {isPayable && !isPaymentsEnabled() && (
+                      <span className="text-xs text-amber-600 font-semibold bg-amber-50 border border-amber-100 rounded px-2.5 py-1">
+                        ⚠️ Payments Disabled
+                      </span>
                     )}
                     <OrderActions
                       orderId={order.id}
