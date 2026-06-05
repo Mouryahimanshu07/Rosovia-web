@@ -13,7 +13,7 @@ export interface CreateMediaAssetData {
   mime_type: string;
   duration_seconds?: number | null;
   is_private: boolean;
-  status: 'uploaded' | 'processing';
+  status: MediaStatus;
 }
 
 export async function getMediaAssetById(

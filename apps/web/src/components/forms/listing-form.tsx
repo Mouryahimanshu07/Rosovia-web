@@ -14,7 +14,7 @@ import {
 import {
   createListingAction,
   updateListingAction,
-} from '~/app/dashboard/creator/listings/actions';
+} from '~/app/dashboard/(portal)/creator/listings/actions';
 import { Button, Input } from '@rosovia/ui';
 
 interface ListingFormProps {

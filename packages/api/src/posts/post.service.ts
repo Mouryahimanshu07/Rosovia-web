@@ -115,6 +115,10 @@ export async function createCreatorPost(
     }
   }
 
+  if (input.postType === 'listing_showcase' && !input.listingId) {
+    throw new Error('Listing selection is required for a listing showcase post');
+  }
+
   // Validate listing if provided: must belong to this creator
   if (input.listingId) {
     const { data: listing, error: listingError } = await supabase
@@ -134,7 +138,8 @@ export async function createCreatorPost(
     }
   }
 
-  // Create post — always pending moderation (no self-approval)
+  // Create post — instant publish (approved by default, no admin queue).
+  // Admins can still hide/reject posts reactively if needed.
   // TODO: Rate limit hook — max X posts per hour per creator
   const post = await createPost(supabase, {
     creator_profile_id: creatorProfile.id,
@@ -142,7 +147,7 @@ export async function createCreatorPost(
     post_type: input.postType,
     listing_id: input.listingId ?? null,
     visibility: input.visibility ?? 'public',
-    moderation_status: 'pending',
+    moderation_status: 'approved',
   });
 
   // Attach media

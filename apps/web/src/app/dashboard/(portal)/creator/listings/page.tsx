@@ -68,8 +68,32 @@ export default async function CreatorListingsPage() {
               <tbody className="divide-y divide-gray-100">
                 {listings.map((listing) => (
                   <tr key={listing.id} className="hover:bg-gray-50 transition">
-                    <td className="px-4 py-3 font-medium text-gray-900 max-w-[180px] truncate">
-                      {listing.title}
+                    <td className="px-4 py-3 font-medium text-gray-900 max-w-[240px]">
+                      <div className="font-semibold truncate">{listing.title}</div>
+                      {listing.status === 'pending_review' && (
+                        <p className="text-[11px] text-amber-600 mt-1 font-medium leading-relaxed">
+                          pending review normally takes admin approval
+                        </p>
+                      )}
+                      {listing.status === 'rejected' && (
+                        <div className="mt-1 space-y-1">
+                          {listing.moderation_note && (
+                            <div className="text-[10px] text-red-700 font-mono leading-normal bg-red-50 border border-red-100 p-1.5 rounded">
+                              <span className="font-bold text-gray-500 block uppercase tracking-wider text-[8px] mb-0.5">Admin Note:</span>
+                              {listing.moderation_note}
+                            </div>
+                          )}
+                          <p className="text-[11px] text-red-600 font-semibold leading-relaxed">
+                            rejected item can be edited and resubmitted
+                          </p>
+                        </div>
+                      )}
+                      {listing.status === 'suspended' && listing.moderation_note && (
+                        <div className="text-[10px] text-red-800 font-mono mt-1 leading-normal bg-red-50 border border-red-100 p-1.5 rounded">
+                          <span className="font-bold text-gray-550 block uppercase tracking-wider text-[8px] mb-0.5">Suspension Reason:</span>
+                          {listing.moderation_note}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
                       <ListingTypeBadge type={listing.listing_type} />

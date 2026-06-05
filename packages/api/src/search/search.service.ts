@@ -42,6 +42,18 @@ export async function getExplorePageData(
 }> {
   const q = typeof rawParams.q === 'string' ? rawParams.q.trim() : '';
 
+  const pageVal = Array.isArray(rawParams.page) ? rawParams.page[0] : rawParams.page;
+  const page = pageVal ? parseInt(pageVal, 10) : 1;
+
+  const sortVal = Array.isArray(rawParams.sort) ? rawParams.sort[0] : rawParams.sort;
+  const sort = sortVal || 'newest';
+
+  const categoryVal = Array.isArray(rawParams.category) ? rawParams.category[0] : rawParams.category;
+  const category = categoryVal || undefined;
+
+  const postTypeVal = Array.isArray(rawParams.postType) ? rawParams.postType[0] : rawParams.postType;
+  const postType = postTypeVal || undefined;
+
   const [categories, listings, creatorsRaw, workFeed] = await Promise.all([
     listActiveCategories(supabase),
     q
@@ -52,8 +64,10 @@ export async function getExplorePageData(
         })),
     listPublicCreatorProfiles(supabase, { limit: 8 }),
     listPublicWorkFeedPosts(supabase, {
-      page: 1,
-      sort: 'newest',
+      page,
+      sort: sort as any,
+      category,
+      postType: postType as any,
       ...(q ? { q } : {}),
     }),
   ]);

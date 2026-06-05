@@ -36,13 +36,18 @@ function matchMimeType(fileType: string, pattern: string): boolean {
   return false;
 }
 
-function getMaxSizeBytes(usage: MediaUsage, maxSizeBytes?: number): number {
+function getMaxSizeBytes(usage: MediaUsage, maxSizeBytes?: number, accept?: string): number {
   if (maxSizeBytes !== undefined) return maxSizeBytes;
   switch (usage) {
     case 'profile_image': return MAX_SIZE.profile_image;
     case 'listing_media':
+      // If accept is explicitly images-only, use image limit
+      if (accept && accept === 'image/*') return MAX_SIZE.listing_media_image;
+      return MAX_SIZE.listing_media_video; // worst-case for mixed/video
     case 'post_media':
-      return MAX_SIZE.listing_media_video; // worst-case for mixed
+      // Post images are limited to 10 MB; post videos/mixed get 50 MB
+      if (accept && accept === 'image/*') return MAX_SIZE.listing_media_image;
+      return MAX_SIZE.listing_media_video;
     case 'verification_document': return MAX_SIZE.verification_document;
     default: return MAX_SIZE.general;
   }
@@ -92,7 +97,7 @@ export function MediaUpload({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const allowedMimeTypes = getAllowedMimeTypes(usage, accept);
-  const maxBytes = getMaxSizeBytes(usage, maxSizeBytes);
+  const maxBytes = getMaxSizeBytes(usage, maxSizeBytes, accept);
 
   const reset = () => {
     setState('idle');

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { replyToInquiryAction } from '~/app/dashboard/creator/inquiries/actions';
+import { replyToInquiryAction } from '~/app/dashboard/(portal)/creator/inquiries/actions';
 
 interface InquiryReplyFormProps {
   inquiryId: string;

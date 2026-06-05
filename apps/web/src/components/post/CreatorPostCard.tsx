@@ -20,9 +20,14 @@ interface CreatorPostCardProps {
   post: CreatorPostWithDetails;
   /** If true, shows creator info row (used in work feed) */
   showCreator?: boolean;
+  isOwnDashboard?: boolean;
 }
 
-export function CreatorPostCard({ post, showCreator = true }: CreatorPostCardProps) {
+export function CreatorPostCard({
+  post,
+  showCreator = true,
+  isOwnDashboard = false,
+}: CreatorPostCardProps) {
   const firstMedia = post.media[0];
   const isVideo = firstMedia?.media_type === 'video';
   const hasMultiple = post.media.length > 1;
@@ -32,6 +37,27 @@ export function CreatorPostCard({ post, showCreator = true }: CreatorPostCardPro
     <article className="group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg hover:border-indigo-100 transition-all duration-300 flex flex-col">
       {/* Media Thumbnail */}
       <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden flex-shrink-0">
+        {/* Moderation Status Badge */}
+        {isOwnDashboard && (
+          <div className="absolute top-2 left-2 z-10 flex flex-wrap gap-1">
+            {post.moderation_status === 'approved' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 backdrop-blur-sm px-2.5 py-1 text-xs font-bold text-white shadow-sm border border-emerald-400/20">
+                ● Live
+              </span>
+            )}
+            {post.moderation_status === 'rejected' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-500/90 backdrop-blur-sm px-2.5 py-1 text-xs font-bold text-white shadow-sm border border-red-400/20">
+                ● Rejected
+              </span>
+            )}
+            {post.moderation_status === 'hidden' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-600/90 backdrop-blur-sm px-2.5 py-1 text-xs font-bold text-white shadow-sm border border-gray-500/20">
+                ● Hidden
+              </span>
+            )}
+          </div>
+        )}
+
         {firstMedia ? (
           <>
             {isVideo ? (
@@ -124,8 +150,73 @@ export function CreatorPostCard({ post, showCreator = true }: CreatorPostCardPro
           <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">{post.caption}</p>
         )}
 
+        {/* Linked Listing Showcase Card */}
+        {post.post_type === 'listing_showcase' && post.listing && (
+          <Link
+            href={`/listings/${post.listing.slug}`}
+            className="mt-2 block p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/20 hover:bg-indigo-50/55 hover:border-indigo-200 transition-all duration-200 shadow-sm"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block mb-0.5">
+                  🏪 Showcasing Listing
+                </span>
+                <h4 className="text-sm font-semibold text-gray-900 truncate group-hover/listing:text-indigo-600">
+                  {post.listing.title}
+                </h4>
+              </div>
+              <div className="flex-shrink-0 text-right">
+                {post.listing.price !== null ? (
+                  <span className="text-xs font-bold text-indigo-700 bg-white border border-indigo-100 rounded-lg px-2.5 py-1 inline-block shadow-sm">
+                    {post.listing.currency} {post.listing.price.toLocaleString('en-IN')}
+                  </span>
+                ) : (
+                  <span className="text-xs italic text-gray-500 bg-white border border-gray-100 rounded-lg px-2.5 py-1 inline-block shadow-sm">
+                    Price on Request
+                  </span>
+                )}
+              </div>
+            </div>
+          </Link>
+        )}
+
+        {/* Moderation Info (Owner Only) — only shown for non-live states */}
+        {isOwnDashboard && (post.moderation_status === 'rejected' || post.moderation_status === 'hidden') && (
+          <div className="mt-2 space-y-1.5 rounded-xl text-xs">
+            {post.moderation_status === 'rejected' && (
+              <div className="text-red-850 border border-red-100 bg-red-50/50 p-2.5 rounded-xl space-y-2">
+                <span className="font-bold text-red-800 flex items-center gap-1">❌ Rejected</span>
+                {post.moderation_note && (
+                  <div className="bg-white/95 p-2 rounded-lg border border-red-100 text-[10px] text-red-700 leading-relaxed font-mono">
+                    <span className="font-bold text-gray-500 block uppercase tracking-wider text-[9px] mb-0.5">Admin Note:</span>
+                    {post.moderation_note}
+                  </div>
+                )}
+                <span className="text-[11px] block leading-relaxed text-red-600 font-medium">
+                  rejected item can be edited and resubmitted
+                </span>
+              </div>
+            )}
+            {post.moderation_status === 'hidden' && (
+              <div className="text-gray-850 border border-gray-250 bg-gray-50/50 p-2.5 rounded-xl space-y-2">
+                <span className="font-bold text-gray-800 flex items-center gap-1">👁️ Hidden</span>
+                {post.moderation_note && (
+                  <div className="bg-white/95 p-2 rounded-lg border border-gray-150 text-[10px] text-gray-700 leading-relaxed font-mono">
+                    <span className="font-bold text-gray-500 block uppercase tracking-wider text-[9px] mb-0.5">Admin Note:</span>
+                    {post.moderation_note}
+                  </div>
+                )}
+                <span className="text-[11px] block leading-relaxed text-gray-500">
+                  This post has been hidden by the admin.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+
         {/* Footer row: stats + time */}
-        <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-55">
+        <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100">
           <div className="flex items-center gap-3 text-xs text-gray-400">
             <span className="flex items-center gap-1" title="Views">
               <Eye className="h-3.5 w-3.5" />

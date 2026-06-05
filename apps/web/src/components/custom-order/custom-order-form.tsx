@@ -62,7 +62,7 @@ export function CustomOrderForm({
 
     startTransition(async () => {
       const { createCustomOrderAction } = await import(
-        '~/app/dashboard/buyer/custom-orders/actions'
+        '~/app/dashboard/(portal)/buyer/custom-orders/actions'
       );
       const result = await createCustomOrderAction(parsed.data);
 

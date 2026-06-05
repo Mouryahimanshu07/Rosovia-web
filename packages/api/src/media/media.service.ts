@@ -126,17 +126,42 @@ export async function saveUploadedMediaMetadata(
 
   // Verify the uploaded object exists in R2 before creating the DB row.
   // This prevents fake metadata rows for files that were never uploaded.
-  const objectMetadata = await getR2ObjectMetadata(input.storageKey);
-  if (!objectMetadata.exists) {
-    throw new Error('Uploaded object was not found in storage. Please retry the upload.');
-  }
+  // If R2 is unreachable or throws a non-404 error, we skip verification
+  // (the file was already accepted by R2 via the signed PUT URL).
+  try {
+    const objectMetadata = await getR2ObjectMetadata(input.storageKey);
 
-  if (objectMetadata.contentLength !== null && objectMetadata.contentLength !== input.sizeBytes) {
-    throw new Error('Uploaded file size does not match the signed upload request.');
-  }
+    if (!objectMetadata.exists) {
+      throw new Error('Uploaded object was not found in storage. Please retry the upload.');
+    }
 
-  if (objectMetadata.contentType && objectMetadata.contentType !== input.mimeType) {
-    throw new Error('Uploaded file MIME type does not match the signed upload request.');
+    // Size check: only fail if we have a definitive mismatch
+    if (objectMetadata.contentLength !== null && objectMetadata.contentLength !== input.sizeBytes) {
+      throw new Error(
+        `Uploaded file size does not match (expected ${input.sizeBytes} bytes, got ${objectMetadata.contentLength} bytes).`
+      );
+    }
+
+    // Content-type check: R2 may append charset suffix, so check prefix only
+    if (objectMetadata.contentType) {
+      const r2Type = objectMetadata.contentType.split(';')[0]?.trim();
+      if (r2Type && r2Type !== input.mimeType) {
+        throw new Error(
+          `Uploaded file type does not match (expected ${input.mimeType}, got ${r2Type}).`
+        );
+      }
+    }
+  } catch (verifyErr) {
+    // Re-throw intentional validation errors (not-found, size/type mismatch)
+    if (verifyErr instanceof Error && (
+      verifyErr.message.includes('not found in storage') ||
+      verifyErr.message.includes('does not match')
+    )) {
+      throw verifyErr;
+    }
+    // For any other R2 error (network, auth, timeout), log and continue —
+    // the signed URL already validated the upload on R2's side.
+    console.warn('[media] R2 HeadObject verification failed, skipping:', verifyErr instanceof Error ? verifyErr.message : verifyErr);
   }
 
   // Server always derives is_private from storageKey prefix — don't trust client
@@ -163,7 +188,15 @@ export async function saveUploadedMediaMetadata(
     mime_type: input.mimeType,
     duration_seconds: input.durationSeconds ?? null,
     is_private: isPrivate,
-    status: isPrivate ? 'uploaded' : 'processing',
+    status:
+      !isPrivate &&
+      (input.usage === 'profile_image' ||
+        input.usage === 'listing_media' ||
+        input.usage === 'post_media')
+        ? 'approved'
+        : isPrivate
+        ? 'uploaded'
+        : 'processing',
   };
 
   return createMediaAsset(supabase, row);

@@ -33,9 +33,30 @@ export default async function NewPostPage({ params }: Props) {
   // Only creators can have posts
   if (profile.role !== 'creator') redirect(`/u/${profile.username}`);
 
+  // Fetch creator profile
+  const { data: creatorProfile } = await supabase
+    .from('creator_profiles')
+    .select('id')
+    .eq('user_id', profile.id)
+    .is('deleted_at', null)
+    .single();
+
+  let listings: { id: string; title: string }[] = [];
+  if (creatorProfile) {
+    const { data: listingData } = await supabase
+      .from('listings')
+      .select('id, title')
+      .eq('creator_id', creatorProfile.id)
+      .eq('status', 'approved')
+      .is('deleted_at', null)
+      .order('title', { ascending: true });
+
+    listings = listingData ?? [];
+  }
+
   return (
     <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-      <NewCreatorPostPageClient username={params.username} />
+      <NewCreatorPostPageClient username={params.username} listings={listings} />
     </main>
   );
 }

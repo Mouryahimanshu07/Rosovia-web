@@ -6,12 +6,14 @@ interface CreatorPostGridProps {
   posts: CreatorPostWithDetails[];
   showCreator?: boolean;
   emptyMessage?: string;
+  isOwnDashboard?: boolean;
 }
 
 export function CreatorPostGrid({
   posts,
   showCreator = true,
   emptyMessage = 'No work posts yet.',
+  isOwnDashboard = false,
 }: CreatorPostGridProps) {
   if (posts.length === 0) {
     return (
@@ -27,7 +29,12 @@ export function CreatorPostGrid({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
       {posts.map((post) => (
-        <CreatorPostCard key={post.id} post={post} showCreator={showCreator} />
+        <CreatorPostCard
+          key={post.id}
+          post={post}
+          showCreator={showCreator}
+          isOwnDashboard={isOwnDashboard}
+        />
       ))}
     </div>
   );

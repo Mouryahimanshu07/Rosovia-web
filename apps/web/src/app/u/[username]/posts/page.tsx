@@ -91,7 +91,19 @@ export default async function UserPostsPage({ params }: Props) {
             <span className="font-semibold">
               {pending} post{pending > 1 ? 's are' : ' is'} pending review.
             </span>{' '}
-            Posts are typically reviewed within 24 hours. They will become visible after approval.
+            pending review normally takes admin approval. Posts are typically reviewed within 24 hours.
+          </div>
+        </div>
+      )}
+
+      {rejected > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-500" />
+          <div>
+            <span className="font-semibold">
+              {rejected} post{rejected > 1 ? 's have' : ' has'} been rejected.
+            </span>{' '}
+            rejected item can be edited and resubmitted.
           </div>
         </div>
       )}
@@ -117,7 +129,7 @@ export default async function UserPostsPage({ params }: Props) {
           </Link>
         </div>
       ) : (
-        <CreatorPostGrid posts={posts} showCreator={false} />
+        <CreatorPostGrid posts={posts} showCreator={false} isOwnDashboard={true} />
       )}
     </main>
   );

@@ -4,6 +4,7 @@ import type {
   CreatorPostWithDetails,
   FeedParams,
 } from '@rosovia/core';
+import { getDatabaseClients } from '@rosovia/integrations';
 
 const PAGE_SIZE = 12;
 
@@ -31,6 +32,7 @@ export async function listPublicWorkFeedPosts(
         verification_level,
         user_id,
         deleted_at,
+        primary_category_id,
         profiles!inner ( status, deleted_at )
       ),
       creator_post_media (
@@ -39,16 +41,15 @@ export async function listPublicWorkFeedPosts(
         media_asset_id,
         sort_order,
         media_assets ( id, public_url, mime_type, media_type, thumbnail_url )
-      )
+      ),
+      listings ( id, title, slug, price, currency, category_id )
     `)
     .eq('visibility', 'public')
     .eq('moderation_status', 'approved')
     .is('deleted_at', null)
     .is('creator_profiles.deleted_at', null)
     .eq('creator_profiles.profiles.status', 'active')
-    .is('creator_profiles.profiles.deleted_at', null)
-    .order('created_at', { ascending: false })
-    .range(offset, offset + PAGE_SIZE);
+    .is('creator_profiles.profiles.deleted_at', null);
 
   if (params.postType) {
     query = query.eq('post_type', params.postType);
@@ -57,6 +58,39 @@ export async function listPublicWorkFeedPosts(
   if (params.q) {
     query = query.ilike('caption', `%${params.q}%`);
   }
+
+  if (params.category) {
+    let categoryId = params.category;
+    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/i.test(params.category);
+    if (!isUuid) {
+      const { data: cat } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', params.category)
+        .single();
+      if (cat) {
+        categoryId = cat.id;
+      } else {
+        return { data: [], hasNext: false };
+      }
+    }
+
+    query = query.or(
+      `listings.category_id.eq.${categoryId},creator_profiles.primary_category_id.eq.${categoryId}`
+    );
+  }
+
+  if (params.sort === 'popular') {
+    query = query
+      .order('like_count', { ascending: false })
+      .order('save_count', { ascending: false })
+      .order('view_count', { ascending: false })
+      .order('created_at', { ascending: false });
+  } else {
+    query = query.order('created_at', { ascending: false });
+  }
+
+  query = query.range(offset, offset + PAGE_SIZE);
 
   const { data, error } = await query;
   if (error) throw new Error(`Failed to fetch work feed: ${error.message}`);
@@ -93,7 +127,8 @@ export async function listPostsForCreatorProfile(
       creator_post_media (
         id, post_id, media_asset_id, sort_order,
         media_assets ( id, public_url, mime_type, media_type, thumbnail_url )
-      )
+      ),
+      listings ( id, title, slug, price, currency )
     `)
     .eq('creator_profile_id', creatorProfileId)
     .is('deleted_at', null)
@@ -111,9 +146,44 @@ export async function listPostsForCreatorProfile(
   if (error) throw new Error(`Failed to fetch creator posts: ${error.message}`);
 
   const rows = (data ?? []) as any[];
+  const slice = rows.slice(0, PAGE_SIZE);
+
+  // Fetch latest moderation notes for rejected/hidden posts via service role client
+  const postIds = slice.map((r) => r.id);
+  const latestNoteByPostId: Record<string, string | null> = {};
+
+  if (postIds.length > 0) {
+    try {
+      const { master: serviceRoleClient } = getDatabaseClients();
+      const { data: notes, error: notesError } = await serviceRoleClient
+        .from('admin_actions')
+        .select('target_id, note, created_at')
+        .eq('target_type', 'post')
+        .in('target_id', postIds)
+        .in('action_type', ['post_rejected', 'post_hidden'])
+        .order('created_at', { ascending: false });
+
+      if (!notesError && notes) {
+        for (const n of notes) {
+          if (!latestNoteByPostId[n.target_id]) {
+            latestNoteByPostId[n.target_id] = n.note;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch admin moderation notes for creator posts:', e);
+    }
+  }
+
+  const mappedPosts = slice.map((row) => {
+    const post = mapRowToPost(row);
+    post.moderation_note = latestNoteByPostId[row.id] ?? null;
+    return post;
+  });
+
   const hasNext = rows.length > PAGE_SIZE;
   return {
-    data: rows.slice(0, PAGE_SIZE).map(mapRowToPost),
+    data: mappedPosts,
     hasNext,
   };
 }
@@ -145,7 +215,8 @@ export async function listPublicPostsForCreatorProfile(
       creator_post_media (
         id, post_id, media_asset_id, sort_order,
         media_assets ( id, public_url, mime_type, media_type, thumbnail_url )
-      )
+      ),
+      listings ( id, title, slug, price, currency )
     `)
     .eq('creator_profile_id', creatorProfileId)
     .in('visibility', allowedVisibilities)
@@ -180,10 +251,6 @@ export async function getPostById(
   }
   return data as CreatorPost;
 }
-
-// ---------------------------------------------------------------------------
-// Create post + media in one transaction
-// ---------------------------------------------------------------------------
 
 export async function createPost(
   supabase: SupabaseClient,
@@ -319,5 +386,14 @@ function mapRowToPost(row: any): CreatorPostWithDetails {
     creator_verification_level: cp?.verification_level ?? 'none',
     category_name: null,
     media,
+    listing: row.listings
+      ? {
+          id: row.listings.id,
+          title: row.listings.title,
+          slug: row.listings.slug,
+          price: row.listings.price,
+          currency: row.listings.currency,
+        }
+      : null,
   };
 }

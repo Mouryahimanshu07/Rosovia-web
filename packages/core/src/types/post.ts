@@ -52,6 +52,14 @@ export interface CreatorPostWithDetails extends CreatorPost {
   creator_verification_level: string;
   category_name: string | null;
   media: CreatorPostMediaWithUrl[];
+  listing?: {
+    id: string;
+    title: string;
+    slug: string;
+    price: number | null;
+    currency: string;
+  } | null;
+  moderation_note?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +89,6 @@ export interface FeedParams {
   page?: number;
   postType?: PostType;
   category?: string;
-  sort?: 'newest' | 'popular';
+  sort?: 'newest' | 'latest' | 'popular';
   q?: string;
 }

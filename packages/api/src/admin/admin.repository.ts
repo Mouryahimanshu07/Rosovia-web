@@ -12,6 +12,8 @@ import type {
   AdminListParams,
   AdminCategoryInput,
   MarketplaceKpiSummary,
+  CreatorPost,
+  CreatorPostWithDetails,
 } from '@rosovia/core';
 
 const PAGE_SIZE = 20;
@@ -349,12 +351,14 @@ export async function setListingStatusAtomic(
   supabase: SupabaseClient,
   listingId: string,
   status: ListingStatus,
-  note: string | null = null
+  note: string | null = null,
+  adminId: string | null = null
 ): Promise<Listing> {
   const { data, error } = await supabase.rpc('admin_moderate_listing_atomic', {
     p_listing_id: listingId,
     p_status: status,
     p_note: note,
+    p_admin_id: adminId,
   });
 
   if (error) throw new Error(`Failed to update listing status: ${error.message}`);
@@ -587,4 +591,109 @@ export async function listAdminActionLogs(
       admin_name: r.admin?.full_name ?? r.admin?.username ?? null,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Posts Moderation
+// ---------------------------------------------------------------------------
+
+export async function listAdminPosts(
+  supabase: SupabaseClient,
+  params: AdminListParams = {}
+): Promise<CreatorPostWithDetails[]> {
+  const page = params.page ?? 1;
+  const offset = (page - 1) * PAGE_SIZE;
+
+  let query = supabase
+    .from('creator_posts')
+    .select(`
+      *,
+      creator_profiles!inner (
+        id,
+        display_name,
+        slug,
+        profile_image_url,
+        is_verified,
+        verification_level,
+        user_id,
+        profiles!inner ( username, full_name )
+      ),
+      creator_post_media (
+        id,
+        post_id,
+        media_asset_id,
+        sort_order,
+        media_assets ( id, public_url, mime_type, media_type, thumbnail_url )
+      )
+    `)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1);
+
+  if (params.status) {
+    query = query.eq('moderation_status', params.status);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to list admin posts: ${error.message}`);
+
+  return (data ?? []).map((row: any) => {
+    const cp = row.creator_profiles;
+    const media = (row.creator_post_media ?? []).map((m: any) => ({
+      id: m.id,
+      post_id: m.post_id,
+      media_asset_id: m.media_asset_id,
+      sort_order: m.sort_order,
+      created_at: m.created_at,
+      public_url: m.media_assets?.public_url ?? null,
+      mime_type: m.media_assets?.mime_type ?? '',
+      media_type: m.media_assets?.media_type ?? 'image',
+      thumbnail_url: m.media_assets?.thumbnail_url ?? null,
+    }));
+
+    media.sort((a: any, b: any) => a.sort_order - b.sort_order);
+
+    return {
+      id: row.id,
+      creator_profile_id: row.creator_profile_id,
+      caption: row.caption,
+      post_type: row.post_type,
+      listing_id: row.listing_id,
+      visibility: row.visibility,
+      moderation_status: row.moderation_status,
+      like_count: row.like_count,
+      save_count: row.save_count,
+      view_count: row.view_count,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      deleted_at: row.deleted_at,
+      creator_display_name: cp?.display_name ?? null,
+      creator_slug: cp?.slug ?? null,
+      creator_username: cp?.profiles?.username ?? null,
+      creator_full_name: cp?.profiles?.full_name ?? null,
+      creator_profile_image_url: cp?.profile_image_url ?? null,
+      creator_is_verified: cp?.is_verified ?? false,
+      creator_verification_level: cp?.verification_level ?? 'none',
+      category_name: null,
+      media,
+    } as any;
+  });
+}
+
+export async function setPostStatusAtomic(
+  supabase: SupabaseClient,
+  postId: string,
+  status: 'pending' | 'approved' | 'rejected' | 'hidden',
+  note: string | null = null,
+  adminId: string | null = null
+): Promise<CreatorPost> {
+  const { data, error } = await supabase.rpc('admin_moderate_post_atomic', {
+    p_post_id: postId,
+    p_status: status,
+    p_note: note,
+    p_admin_id: adminId,
+  });
+
+  if (error) throw new Error(`Failed to update post status: ${error.message}`);
+  return data as CreatorPost;
 }

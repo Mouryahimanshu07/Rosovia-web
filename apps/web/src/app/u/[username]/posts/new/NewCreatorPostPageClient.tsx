@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPostAction } from '~/app/actions/posts';
 import { POST_TYPES, type MediaAsset, type PostType } from '@rosovia/core';
-import { ArrowLeft, Loader2, X, Video, ImagePlus } from 'lucide-react';
+import { ArrowLeft, Loader2, X, Video, ImagePlus, FileVideo } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { MediaUpload } from '~/components/media/media-upload';
@@ -19,15 +19,17 @@ const POST_TYPE_LABELS: Record<string, string> = {
 
 interface NewCreatorPostPageClientProps {
   username: string;
+  listings?: { id: string; title: string }[];
 }
 
-export function NewCreatorPostPageClient({ username }: NewCreatorPostPageClientProps) {
+export function NewCreatorPostPageClient({ username, listings = [] }: NewCreatorPostPageClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   // Form state
   const [postType, setPostType] = useState<PostType>('image');
+  const [selectedListingId, setSelectedListingId] = useState('');
   const [caption, setCaption] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'followers' | 'private'>('public');
   const [uploadedAssets, setUploadedAssets] = useState<MediaAsset[]>([]);
@@ -35,6 +37,7 @@ export function NewCreatorPostPageClient({ username }: NewCreatorPostPageClientP
   // Clear uploaded assets if post type changes to avoid mismatches
   useEffect(() => {
     setUploadedAssets([]);
+    setSelectedListingId('');
     setError(null);
   }, [postType]);
 
@@ -81,12 +84,18 @@ export function NewCreatorPostPageClient({ username }: NewCreatorPostPageClientP
       return;
     }
 
+    if (postType === 'listing_showcase' && !selectedListingId) {
+      setError('Please select an approved listing to showcase.');
+      return;
+    }
+
     startTransition(async () => {
       const result = await createPostAction({
         postType,
         caption: caption.trim() || null,
         visibility,
         mediaAssetIds: ids,
+        listingId: postType === 'listing_showcase' ? selectedListingId : null,
       });
 
       if (result.success) {
@@ -112,7 +121,7 @@ export function NewCreatorPostPageClient({ username }: NewCreatorPostPageClientP
       <div>
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Share Work Post</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Your post will go live after a quick moderation review (usually within 24 hours).
+          Your post will go live instantly and appear on your profile and Explore feed.
         </p>
       </div>
 
@@ -139,6 +148,35 @@ export function NewCreatorPostPageClient({ username }: NewCreatorPostPageClientP
           </div>
         </div>
 
+        {/* Listing Selector (for Listing Showcase) */}
+        {postType === 'listing_showcase' && (
+          <div className="space-y-2">
+            <label htmlFor="listing-select" className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+              <span>Select Approved Listing</span>
+              <span className="text-red-500">*</span>
+            </label>
+            {listings && listings.length > 0 ? (
+              <select
+                id="listing-select"
+                value={selectedListingId}
+                onChange={(e) => setSelectedListingId(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white transition-all duration-200"
+              >
+                <option value="">-- Choose an Approved Listing --</option>
+                {listings.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.title}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="rounded-xl border border-yellow-100 bg-yellow-50 p-4 text-xs sm:text-sm text-yellow-800">
+                ⚠️ You do not have any approved listings. Only approved listings can be showcased in posts. Please create and submit a listing for approval first.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Media Uploader Box */}
         <div className="space-y-3">
           <div className="flex justify-between items-center">
@@ -153,7 +191,11 @@ export function NewCreatorPostPageClient({ username }: NewCreatorPostPageClientP
           {/* Upload Widget */}
           {uploadedAssets.length < maxFiles ? (
             <div className="border-2 border-dashed border-gray-200 rounded-2xl p-6 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 hover:border-indigo-300 transition-all duration-200">
-              <ImagePlus className="h-8 w-8 text-gray-400 mb-2" />
+              {postType === 'short_video' ? (
+                <FileVideo className="h-8 w-8 text-gray-400 mb-2" />
+              ) : (
+                <ImagePlus className="h-8 w-8 text-gray-400 mb-2" />
+              )}
               <p className="text-xs text-gray-500 text-center mb-4">{typeDescription}</p>
               <MediaUpload
                 key={`${postType}-${uploadedAssets.length}`}
@@ -283,7 +325,7 @@ export function NewCreatorPostPageClient({ username }: NewCreatorPostPageClientP
                 Submitting…
               </>
             ) : (
-              'Submit for Review'
+              'Publish Post'
             )}
           </button>
         </div>

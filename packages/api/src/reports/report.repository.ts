@@ -242,6 +242,15 @@ export async function validateReportTargetExists(
         .maybeSingle();
       break;
 
+    case 'post':
+      query = supabase
+        .from('creator_posts')
+        .select('id')
+        .eq('id', targetId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      break;
+
     default:
       return false;
   }

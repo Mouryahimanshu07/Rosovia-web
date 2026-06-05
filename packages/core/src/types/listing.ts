@@ -67,5 +67,6 @@ export interface ListingWithDetails extends Listing {
   creator_verification_level?: VerificationLevel | null;
   creator_rating_avg?: number | null;
   creator_rating_count?: number | null;
+  moderation_note?: string | null;
 }
 

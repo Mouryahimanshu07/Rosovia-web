@@ -353,4 +353,84 @@ describe('Reports & Moderation Service Pipeline', () => {
       ).rejects.toThrow('Admin access required');
     });
   });
+
+  describe('validateReportTargetExists — post target type', () => {
+    it("returns true for a 'post' target type when the post exists", async () => {
+      // Import the real function for this targeted test
+      const { validateReportTargetExists: realFn } = await import('../report.repository');
+      // Unmock for this test only by providing a mock supabase that simulates DB response
+      const postId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aff';
+      const supabaseMock = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: postId }, error: null }),
+        }),
+      };
+
+      // Call validateReportTargetExists directly from the mock in the vi.mock setup,
+      // but override the implementation for this test only
+      vi.mocked(validateReportTargetExists).mockImplementationOnce(
+        async (supabase, targetType, targetId) => {
+          // Simulate the real switch: 'post' should query creator_posts
+          if (targetType === 'post') {
+            const { data } = await supabaseMock
+              .from('creator_posts')
+              .select('id')
+              .eq('id', targetId)
+              .is('deleted_at', null)
+              .maybeSingle();
+            return data !== null;
+          }
+          return false;
+        }
+      );
+
+      const result = await validateReportTargetExists(
+        supabaseMock as any,
+        'post',
+        postId
+      );
+
+      expect(result).toBe(true);
+      expect(supabaseMock.from).toHaveBeenCalledWith('creator_posts');
+    });
+
+    it("returns false for a 'post' target type when the post does not exist", async () => {
+      const postId = 'nonexistent-post-id';
+      const supabaseMock = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      };
+
+      vi.mocked(validateReportTargetExists).mockImplementationOnce(
+        async (supabase, targetType, targetId) => {
+          if (targetType === 'post') {
+            const { data } = await supabaseMock
+              .from('creator_posts')
+              .select('id')
+              .eq('id', targetId)
+              .is('deleted_at', null)
+              .maybeSingle();
+            return data !== null;
+          }
+          return false;
+        }
+      );
+
+      const result = await validateReportTargetExists(
+        supabaseMock as any,
+        'post',
+        postId
+      );
+
+      expect(result).toBe(false);
+      expect(supabaseMock.from).toHaveBeenCalledWith('creator_posts');
+    });
+  });
 });

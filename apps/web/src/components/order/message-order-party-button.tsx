@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { startConversationAction } from '~/app/dashboard/messages/actions';
+import { startConversationAction } from '~/app/dashboard/(portal)/messages/actions';
 
 interface MessageOrderPartyButtonProps {
   /** The creator profile ID (required to start/find the conversation). */

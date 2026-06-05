@@ -28,3 +28,7 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Supabase temp files
+supabase/.temp/
+packages/database/supabase/.temp/

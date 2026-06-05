@@ -32,7 +32,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ media });
   } catch (err) {
-    console.error('Media complete error:', err);
-    return NextResponse.json({ error: 'Failed to process media upload' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Failed to process media upload';
+    console.error('[media/complete] Error:', message, err);
+    // Return the actual error so the user sees a meaningful message instead of a generic one
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

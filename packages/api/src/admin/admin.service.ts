@@ -1,22 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type {
-  AdminDashboardStats,
-  AdminListParams,
-  AdminUserStatusUpdateInput,
-  AdminListingModerationInput,
-  AdminReviewModerationInput,
-  AdminCategoryCreateInput,
-  AdminCategoryUpdateInput,
-  AdminCategoryInput,
-  DbCategory,
-  ListingWithDetails,
-  Profile,
-  OrderWithDetails,
-  Payment,
-  MarketplaceKpiSummary,
-} from '@rosovia/core';
 import { getProfileByAuthUserId } from '../profiles/profile.repository';
 import { createAdminAction } from '../reports/report.repository';
+import { getDatabaseClients } from '@rosovia/integrations';
+import { getListingById } from '../listings/listing.repository';
+import { createSystemNotification } from '../notifications/notification.service';
+import { getPostById } from '../posts/post.repository';
+import { reviewVerificationRequestAsAdmin } from '../verification/verification.service';
 import {
   getAdminDashboardStats,
   listAdminUsers,
@@ -34,10 +23,31 @@ import {
   listAdminPayments,
   listAdminActionLogs,
   getMarketplaceKpiSummary,
+  listAdminPosts,
+  setPostStatusAtomic,
   type AdminCreatorRow,
   type AdminReviewRow,
   type AdminActionWithAdmin,
 } from './admin.repository';
+import type {
+  AdminDashboardStats,
+  AdminListParams,
+  AdminUserStatusUpdateInput,
+  AdminListingModerationInput,
+  AdminReviewModerationInput,
+  AdminCategoryCreateInput,
+  AdminCategoryUpdateInput,
+  AdminCategoryInput,
+  DbCategory,
+  ListingWithDetails,
+  Profile,
+  OrderWithDetails,
+  Payment,
+  MarketplaceKpiSummary,
+  AdminPostModerationSchemaInput,
+  CreatorPostWithDetails,
+  VerificationRequest,
+} from '@rosovia/core';
 
 export type {
   AdminCreatorRow,
@@ -213,7 +223,49 @@ export async function moderateListingAsAdmin(
   } as const;
 
   const newStatus = statusMap[input.action];
-  await setListingStatusAtomic(supabase, input.listingId, newStatus, input.note ?? null);
+  const { master: serviceRoleClient } = getDatabaseClients();
+  
+  await setListingStatusAtomic(serviceRoleClient, input.listingId, newStatus, input.note ?? null, admin.id);
+
+  // Fetch listing details to notify the creator
+  const listing = await getListingById(serviceRoleClient, input.listingId);
+  if (listing) {
+    const { data: creatorProfile } = await serviceRoleClient
+      .from('creator_profiles')
+      .select('user_id')
+      .eq('id', listing.creator_id)
+      .is('deleted_at', null)
+      .single();
+
+    if (creatorProfile?.user_id) {
+      const titleMap = {
+        approve: 'Listing Approved',
+        reject: 'Listing Rejected',
+        suspend: 'Listing Suspended',
+        archive: 'Listing Archived',
+      };
+      
+      const bodyMap = {
+        approve: `Your listing "${listing.title}" has been approved.`,
+        reject: `Your listing "${listing.title}" has been rejected.${input.note ? ` Note: ${input.note}` : ''}`,
+        suspend: `Your listing "${listing.title}" has been suspended.${input.note ? ` Reason: ${input.note}` : ''}`,
+        archive: `Your listing "${listing.title}" has been archived.`,
+      };
+
+      try {
+        await createSystemNotification(serviceRoleClient, {
+          recipientProfileId: creatorProfile.user_id,
+          type: 'admin_action',
+          title: titleMap[input.action],
+          body: bodyMap[input.action],
+          entityType: 'listing',
+          entityId: listing.id,
+        });
+      } catch (notifErr) {
+        console.error('Failed to send creator listing notification:', notifErr);
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -237,6 +289,16 @@ export async function moderateReviewAsAdmin(
   const isHidden = input.action === 'hide';
 
   await setReviewHiddenAtomic(supabase, input.reviewId, isHidden, input.note ?? null);
+
+  // Log admin action for audit trail (matches pattern used in listing/post moderation)
+  await createAdminAction(supabase, {
+    admin_id: admin.id,
+    action_type: isHidden ? 'review_hidden' : 'review_unhidden',
+    target_type: 'review',
+    target_id: input.reviewId,
+    note: input.note ?? null,
+    metadata: { is_hidden: isHidden },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -273,4 +335,97 @@ export async function listAdminActionLogsForAdmin(
 ): Promise<AdminActionWithAdmin[]> {
   await resolveAdmin(supabase);
   return listAdminActionLogs(supabase, params);
+}
+
+// ---------------------------------------------------------------------------
+// 10. Posts Moderation
+// ---------------------------------------------------------------------------
+
+export async function listPostsForAdmin(
+  supabase: SupabaseClient,
+  params: AdminListParams = {}
+): Promise<CreatorPostWithDetails[]> {
+  await resolveAdmin(supabase);
+  return listAdminPosts(supabase, params);
+}
+
+export async function moderatePostAsAdmin(
+  supabase: SupabaseClient,
+  input: AdminPostModerationSchemaInput
+): Promise<void> {
+  const admin = await resolveAdmin(supabase);
+  const { master: serviceRoleClient } = getDatabaseClients();
+
+  await setPostStatusAtomic(
+    serviceRoleClient,
+    input.postId,
+    input.moderationStatus,
+    input.note ?? null,
+    admin.id
+  );
+
+  // Send creator notification
+  const post = await getPostById(serviceRoleClient, input.postId);
+  if (post) {
+    const { data: creatorProfile } = await serviceRoleClient
+      .from('creator_profiles')
+      .select('user_id')
+      .eq('id', post.creator_profile_id)
+      .is('deleted_at', null)
+      .single();
+
+    if (creatorProfile?.user_id) {
+      const type = input.moderationStatus === 'approved' ? 'post_approved' : 'post_rejected';
+      const titleMap = {
+        approved: 'Post Approved',
+        rejected: 'Post Rejected',
+        hidden: 'Post Hidden',
+      };
+      
+      const bodyMap = {
+        approved: 'Your work post has been approved and is now visible on the platform.',
+        rejected: `Your work post has been rejected.${input.note ? ` Note: ${input.note}` : ''}`,
+        hidden: `Your work post has been hidden by administrators.${input.note ? ` Reason: ${input.note}` : ''}`,
+      };
+
+      try {
+        await createSystemNotification(serviceRoleClient, {
+          recipientProfileId: creatorProfile.user_id,
+          type,
+          title: titleMap[input.moderationStatus],
+          body: bodyMap[input.moderationStatus],
+          entityType: 'post',
+          entityId: post.id,
+        });
+      } catch (notifErr) {
+        console.error('Failed to send creator post notification:', notifErr);
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 11. Verification Requests
+// ---------------------------------------------------------------------------
+
+/**
+ * Admin: approve or reject a creator verification request.
+ * Wraps verification.service with a standard admin-only resolveAdmin() gate,
+ * keeping the admin service as the single entry point for all admin actions.
+ */
+export async function moderateVerificationRequestAsAdmin(
+  supabase: SupabaseClient,
+  input: {
+    requestId: string;
+    action: 'approve' | 'reject';
+    note?: string;
+  }
+): Promise<VerificationRequest> {
+  await resolveAdmin(supabase);
+
+  return reviewVerificationRequestAsAdmin(supabase, {
+    verificationRequestId: input.requestId,
+    decision: input.action,
+    adminNote: input.note,
+  });
 }

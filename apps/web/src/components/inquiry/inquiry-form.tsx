@@ -49,7 +49,7 @@ export function InquiryForm({
     startTransition(async () => {
       // Dynamic import to avoid including server action in client bundle unnecessarily
       const { createInquiryAction } = await import(
-        '~/app/dashboard/buyer/inquiries/actions'
+        '~/app/dashboard/(portal)/buyer/inquiries/actions'
       );
       const result = await createInquiryAction({
         creatorId,

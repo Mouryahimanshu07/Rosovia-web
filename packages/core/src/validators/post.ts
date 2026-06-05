@@ -88,7 +88,7 @@ export const feedParamsSchema = z.object({
   page: z.coerce.number().int().positive().optional().catch(1).default(1),
   postType: z.enum(POST_TYPES).optional().catch(undefined),
   category: z.string().max(100).optional(),
-  sort: z.enum(['newest', 'popular']).optional().default('newest'),
+  sort: z.enum(['newest', 'latest', 'popular']).optional().default('newest'),
   q: z.string().max(100).optional(),
 });
 

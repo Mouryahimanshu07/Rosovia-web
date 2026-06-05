@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+declare const process: { env: { SUPABASE_API_URL?: string; SUPABASE_ANON_KEY?: string; SUPABASE_SERVICE_ROLE_KEY?: string; }; };
+
 import { createClient } from '@supabase/supabase-js';
 
 // Connection details for local Supabase Docker stack or mock

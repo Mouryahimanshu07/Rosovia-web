@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Listing, ListingWithDetails, ListingStatus, VerificationLevel } from '@rosovia/core';
+import { getDatabaseClients } from '@rosovia/integrations';
 
 export interface ListListingsParams {
   limit?: number;
@@ -28,6 +29,7 @@ function flattenListing(
     creator_verification_level: row.creator_profiles?.verification_level ?? 'none',
     creator_rating_avg: row.creator_profiles?.rating_avg ?? 0,
     creator_rating_count: row.creator_profiles?.rating_count ?? 0,
+    moderation_note: (row as any).moderation_note ?? null,
   };
 }
 
@@ -138,12 +140,44 @@ export async function listCurrentCreatorListings(
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(`Failed to list creator listings: ${error.message}`);
-  return (data ?? []).map((r) =>
-    flattenListing({
+
+  const rows = data ?? [];
+
+  // Fetch latest moderation notes for rejected/suspended listings via service role client
+  const listingIds = rows.map((r) => r.id);
+  const latestNoteByListingId: Record<string, string | null> = {};
+
+  if (listingIds.length > 0) {
+    try {
+      const { master: serviceRoleClient } = getDatabaseClients();
+      const { data: notes, error: notesError } = await serviceRoleClient
+        .from('admin_actions')
+        .select('target_id, note, created_at')
+        .eq('target_type', 'listing')
+        .in('target_id', listingIds)
+        .in('action_type', ['listing_rejected', 'listing_suspended'])
+        .order('created_at', { ascending: false });
+
+      if (!notesError && notes) {
+        for (const n of notes) {
+          if (!latestNoteByListingId[n.target_id]) {
+            latestNoteByListingId[n.target_id] = n.note;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch admin moderation notes for creator listings:', e);
+    }
+  }
+
+  return rows.map((r) => {
+    const listing = flattenListing({
       ...(r as Listing & { categories?: { name: string } | null }),
       creator_profiles: null,
-    })
-  );
+    });
+    listing.moderation_note = latestNoteByListingId[r.id] ?? null;
+    return listing;
+  });
 }
 
 export async function createListing(
