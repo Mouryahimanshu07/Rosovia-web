@@ -48,3 +48,9 @@ export * from './types/saved-item';
 export * from './validators/saved-item';
 export * from './types/creator-collection';
 export * from './validators/creator-collection';
+export * from './types/post';
+export * from './validators/post';
+export * from './types/follow';
+export * from './validators/follow';
+export * from './validators/profile';
+

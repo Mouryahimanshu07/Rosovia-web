@@ -14,6 +14,7 @@ export type MediaUsage =
   | 'profile_image'
   | 'listing_media'
   | 'verification_document'
+  | 'post_media'
   | 'general';
 
 export interface MediaAsset {

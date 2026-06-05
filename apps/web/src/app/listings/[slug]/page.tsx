@@ -67,6 +67,19 @@ export default async function PublicListingDetailPage({ params }: Props) {
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-10">
+      {/* Payment explanation banner */}
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4 mb-6 flex items-start gap-3">
+        <span className="text-xl">💳</span>
+        <div>
+          <p className="text-xs font-bold text-indigo-950 uppercase tracking-wider">
+            Direct Commission & Custom Orders Active (Payments Disabled)
+          </p>
+          <p className="text-xs text-indigo-900 mt-1 leading-relaxed">
+            Online checkout is temporarily paused as we finalize our integrated talent-commerce escrow gateways. You can safely collaborate and transact by messaging the creator directly or requesting a **Custom Order** below to arrange custom milestones.
+          </p>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 flex-wrap mb-3">

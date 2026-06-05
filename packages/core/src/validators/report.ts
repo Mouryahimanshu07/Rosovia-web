@@ -10,7 +10,9 @@ export const REPORT_TARGET_TYPES = [
   'review',
   'inquiry',
   'user',
+  'post',
 ] as const;
+
 
 export const REPORT_REASONS = [
   'spam',

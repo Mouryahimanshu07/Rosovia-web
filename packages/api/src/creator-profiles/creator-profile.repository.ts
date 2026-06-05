@@ -92,6 +92,10 @@ export async function createCreatorProfile(
     country: string;
     profile_image_url?: string | null;
     intro_video_url?: string | null;
+    cover_image_url?: string | null;
+    headline?: string | null;
+    website_url?: string | null;
+    profile_theme?: string | null;
   }
 ): Promise<CreatorProfile> {
   const { data: created, error } = await supabase
@@ -124,6 +128,10 @@ export async function updateCreatorProfile(
     country?: string;
     profile_image_url?: string | null;
     intro_video_url?: string | null;
+    cover_image_url?: string | null;
+    headline?: string | null;
+    website_url?: string | null;
+    profile_theme?: string | null;
   }
 ): Promise<CreatorProfile> {
   const { data: updated, error } = await supabase

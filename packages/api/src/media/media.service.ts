@@ -64,6 +64,8 @@ export async function createSignedMediaUpload(
     if (!listing) throw new Error('Listing not found.');
     if (listing.creator_id !== creatorProfile.id) throw new Error('You do not own this listing.');
     storageKey = generateStorageKey({ scope: 'listing', listingId: input.listingId }, input.fileName);
+  } else if (input.usage === 'post_media') {
+    storageKey = generateStorageKey({ scope: 'profile', profileId: `${profile.id}/posts` }, input.fileName);
   } else {
     storageKey = generateStorageKey({ scope: 'profile', profileId: profile.id }, input.fileName);
   }

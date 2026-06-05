@@ -14,7 +14,13 @@ export type NotificationType =
   | 'inquiry_received'
   | 'inquiry_replied'
   | 'custom_order_received'
-  | 'custom_order_status_changed';
+  | 'custom_order_status_changed'
+  // Social commerce additions
+  | 'new_follower'
+  | 'post_approved'
+  | 'post_rejected'
+  | 'post_liked'
+  | 'review_reply';
 
 export type NotificationEntityType =
   | 'order'
@@ -28,7 +34,10 @@ export type NotificationEntityType =
   | 'creator'
   | 'user'
   | 'inquiry'
-  | 'custom_order';
+  | 'custom_order'
+  // Social commerce additions
+  | 'post'
+  | 'follow';
 
 export interface Notification {
   id: string;

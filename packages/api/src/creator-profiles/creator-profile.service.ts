@@ -93,6 +93,10 @@ export async function createCurrentUserCreatorProfile(
     country: input.country ?? 'India',
     profile_image_url: input.profileImageUrl ?? null,
     intro_video_url: input.introVideoUrl ?? null,
+    cover_image_url: input.coverImageUrl ?? null,
+    headline: input.headline ?? null,
+    website_url: input.websiteUrl ?? null,
+    profile_theme: input.profileTheme ?? 'default',
   });
 }
 
@@ -118,6 +122,10 @@ export async function updateCurrentUserCreatorProfile(
   if (input.country !== undefined) safeData.country = input.country;
   if (input.profileImageUrl !== undefined) safeData.profile_image_url = input.profileImageUrl ?? null;
   if (input.introVideoUrl !== undefined) safeData.intro_video_url = input.introVideoUrl ?? null;
+  if (input.coverImageUrl !== undefined) safeData.cover_image_url = input.coverImageUrl ?? null;
+  if (input.headline !== undefined) safeData.headline = input.headline ?? null;
+  if (input.websiteUrl !== undefined) safeData.website_url = input.websiteUrl ?? null;
+  if (input.profileTheme !== undefined) safeData.profile_theme = input.profileTheme ?? null;
 
   return updateCreatorProfile(supabase, creatorProfileId, safeData);
 }

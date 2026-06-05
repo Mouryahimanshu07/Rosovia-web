@@ -56,20 +56,27 @@ export function ReviewCard({
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex-1 min-w-0">
           {/* Who — shown differently per perspective */}
-          <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+            {review.order_id && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700 border border-emerald-150 shadow-xs uppercase tracking-wider">
+                ✓ Verified Purchase
+              </span>
+            )}
+          </div>
 
           {/* Source info */}
-          <p className="text-xs text-gray-500 mt-0.5 truncate">
+          <p className="text-xs text-gray-500 mt-1 truncate">
             {viewAs === 'buyer' && review.creator_slug ? (
               <a
                 href={`/creators/${review.creator_slug}`}
-                className="hover:underline text-indigo-600"
+                className="hover:underline text-indigo-600 font-semibold"
               >
                 {review.creator_display_name ?? 'View creator'}
               </a>
             ) : review.listing_title ? (
               <>
-                <span className="text-gray-400">for</span> {review.listing_title}
+                <span className="text-gray-400">for</span> <span className="font-medium text-gray-700">{review.listing_title}</span>
               </>
             ) : null}
           </p>
@@ -98,7 +105,7 @@ export function ReviewCard({
 
       {/* Comment */}
       {review.comment && (
-        <p className="text-sm text-gray-600 leading-relaxed">
+        <p className="text-sm text-gray-650 leading-relaxed whitespace-pre-line bg-gray-50/40 p-3 rounded-lg border border-gray-50 italic">
           &ldquo;{review.comment}&rdquo;
         </p>
       )}
@@ -107,6 +114,25 @@ export function ReviewCard({
       {showHiddenBadge && review.is_hidden && (
         <div className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 border border-orange-200">
           <span aria-hidden="true">⚠</span> Hidden from public
+        </div>
+      )}
+
+      {/* Creator reply section */}
+      {review.creator_reply && (
+        <div className="rounded-xl border border-gray-150 bg-indigo-50/20 p-4 mt-3 ml-4 space-y-1 border-l-4 border-l-indigo-500">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-indigo-950 uppercase tracking-wide flex items-center gap-1">
+              💬 Reply from {review.creator_display_name ?? 'Creator'}
+            </p>
+            {review.creator_replied_at && (
+              <span className="text-[10px] text-gray-400 font-medium">
+                {formatDate(review.creator_replied_at)}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-650 leading-relaxed italic">
+            &ldquo;{review.creator_reply}&rdquo;
+          </p>
         </div>
       )}
     </div>

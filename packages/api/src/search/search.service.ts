@@ -5,6 +5,7 @@ import type {
   DbCategory,
   PaginatedResult,
   ListingSearchParams,
+  CreatorPostWithDetails,
 } from '@rosovia/core';
 
 import {
@@ -23,9 +24,10 @@ import {
 } from './search.repository';
 import { listPublicListings } from '../listings/listing.repository';
 import { listPublicCreatorProfiles } from '../creator-profiles/creator-profile.repository';
+import { listPublicWorkFeedPosts } from '../posts/post.repository';
 
 // ---------------------------------------------------------------------------
-// getExplorePageData
+// getExplorePageData — extended with work feed
 // ---------------------------------------------------------------------------
 
 export async function getExplorePageData(
@@ -35,11 +37,12 @@ export async function getExplorePageData(
   categories: DbCategory[];
   listings: PaginatedResult<ListingWithDetails>;
   creators: CreatorProfileWithCategory[];
+  workFeed: { data: CreatorPostWithDetails[]; hasNext: boolean };
   q: string;
 }> {
   const q = typeof rawParams.q === 'string' ? rawParams.q.trim() : '';
 
-  const [categories, listings, creatorsRaw] = await Promise.all([
+  const [categories, listings, creatorsRaw, workFeed] = await Promise.all([
     listActiveCategories(supabase),
     q
       ? searchApprovedListings(supabase, { q, page: 1 })
@@ -48,15 +51,22 @@ export async function getExplorePageData(
           meta: { page: 1, pageSize: 12, total: null, hasNext: false, hasPrev: false },
         })),
     listPublicCreatorProfiles(supabase, { limit: 8 }),
+    listPublicWorkFeedPosts(supabase, {
+      page: 1,
+      sort: 'newest',
+      ...(q ? { q } : {}),
+    }),
   ]);
 
   return {
     categories,
     listings,
     creators: creatorsRaw,
+    workFeed,
     q,
   };
 }
+
 
 // ---------------------------------------------------------------------------
 // searchListingsForPublicPage

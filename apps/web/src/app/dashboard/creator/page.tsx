@@ -8,13 +8,6 @@ export const dynamic = 'force-dynamic';
 
 const creatorActions = [
   {
-    title: 'Creator Profile',
-    description: 'Set up or update your public creator profile, skills, location, and bio.',
-    href: '/dashboard/creator/profile',
-    icon: '👤',
-    primary: true,
-  },
-  {
     title: 'My Listings',
     description: 'Create and manage products, services, mentorships, classes, and performances.',
     href: '/dashboard/creator/listings',
@@ -92,14 +85,8 @@ export default async function CreatorDashboardPage() {
 
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
-                href="/dashboard/creator/profile"
-                className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-950 hover:bg-gray-100"
-              >
-                Manage Profile
-              </Link>
-              <Link
                 href="/dashboard/creator/listings"
-                className="rounded-md border border-white/30 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+                className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-950 hover:bg-gray-100"
               >
                 Manage Listings
               </Link>

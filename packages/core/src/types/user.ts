@@ -27,6 +27,8 @@ export interface Profile {
   is_mentor: boolean;
   is_business: boolean;
   is_service_provider: boolean;
+  cover_image_url: string | null;
+  bio: string | null;
   status: UserStatus;
   created_at: string;
   updated_at: string;

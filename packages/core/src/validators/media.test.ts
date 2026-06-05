@@ -114,6 +114,42 @@ describe('media validators', () => {
       }
     });
 
+    it('accepts valid post image upload request', () => {
+      const result = signedUploadRequestSchema.safeParse({
+        fileName: 'work.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1024,
+        mediaType: 'image',
+        usage: 'post_media',
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts valid post video upload request', () => {
+      const result = signedUploadRequestSchema.safeParse({
+        fileName: 'clip.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: 10 * 1024 * 1024,
+        mediaType: 'video',
+        usage: 'post_media',
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects post video larger than limit', () => {
+      const result = signedUploadRequestSchema.safeParse({
+        fileName: 'huge.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: MAX_SIZE.listing_media_video + 1,
+        mediaType: 'video',
+        usage: 'post_media',
+      });
+
+      expect(result.success).toBe(false);
+    });
+
     it('rejects unsupported MIME type', () => {
       const result = signedUploadRequestSchema.safeParse({
         fileName: 'script.exe',

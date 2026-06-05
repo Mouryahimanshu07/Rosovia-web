@@ -4,6 +4,11 @@
 -- Purpose: Fix the sorting bug in search_listings_ranked() RPC where rating_high sorted by relevance instead of creator's rating_avg.
 -- =============================================================================
 
+drop function if exists public.search_listings_ranked(
+  text, uuid, text, numeric, numeric, text, text, text, text,
+  boolean, boolean, boolean, boolean, text, integer, integer
+);
+
 create or replace function public.search_listings_ranked(
   p_query        text    default null,
   p_category     uuid    default null,

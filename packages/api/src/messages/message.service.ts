@@ -293,3 +293,52 @@ export async function sendCurrentUserMessage(
 
   return createdMsg;
 }
+
+/**
+ * Retrieves the total unread count of messages across all active conversations for the current user.
+ */
+export async function getUnreadMessageCountForCurrentUser(
+  supabase: SupabaseClient
+): Promise<number> {
+  try {
+    const profile = await resolveActiveProfile(supabase);
+    
+    // Check if the user has a creator profile
+    const { data: creatorProfile } = await supabase
+      .from('creator_profiles')
+      .select('id')
+      .eq('user_id', profile.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    let query = supabase
+      .from('conversations')
+      .select('id')
+      .is('deleted_at', null);
+    
+    if (creatorProfile) {
+      query = query.or(`buyer_id.eq.${profile.id},creator_id.eq.${creatorProfile.id}`);
+    } else {
+      query = query.eq('buyer_id', profile.id);
+    }
+
+    const { data: conversations, error } = await query;
+    if (error || !conversations || conversations.length === 0) return 0;
+
+    const conversationIds = conversations.map((c: any) => c.id);
+
+    const { count, error: countError } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .in('conversation_id', conversationIds)
+      .neq('sender_profile_id', profile.id)
+      .is('read_at', null)
+      .is('deleted_at', null);
+
+    if (countError) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+

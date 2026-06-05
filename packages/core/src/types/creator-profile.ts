@@ -26,6 +26,10 @@ export interface CreatorProfile {
   rating_count: number;
   total_orders: number;
   total_followers: number;
+  cover_image_url: string | null;
+  headline: string | null;
+  website_url: string | null;
+  profile_theme: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

@@ -54,7 +54,7 @@ export const signedUploadRequestSchema = z
     ),
     sizeBytes: z.number().int().positive(),
     mediaType: z.enum(['image', 'video', 'document']),
-    usage: z.enum(['profile_image', 'listing_media', 'verification_document', 'general']),
+    usage: z.enum(['profile_image', 'listing_media', 'verification_document', 'post_media', 'general']),
     listingId: z.string().uuid().optional(),
     isPrivate: z.boolean().optional().default(false),
   })
@@ -108,6 +108,26 @@ export const signedUploadRequestSchema = z
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sizeBytes'], message: 'Verification documents must be 10 MB or smaller.' });
       }
     }
+
+    // post_media: respect image vs video limits
+    if (data.usage === 'post_media') {
+      if (data.mediaType === 'image') {
+        if (!(ALLOWED_IMAGE_MIME_TYPES as readonly string[]).includes(data.mimeType)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mimeType'], message: 'Post images must be JPEG, PNG, or WebP.' });
+        }
+        if (data.sizeBytes > MAX_SIZE.listing_media_image) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sizeBytes'], message: 'Post images must be 10 MB or smaller.' });
+        }
+      }
+      if (data.mediaType === 'video') {
+        if (!(ALLOWED_VIDEO_MIME_TYPES as readonly string[]).includes(data.mimeType)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mimeType'], message: 'Post videos must be MP4 or WebM.' });
+        }
+        if (data.sizeBytes > MAX_SIZE.listing_media_video) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sizeBytes'], message: 'Post videos must be 50 MB or smaller.' });
+        }
+      }
+    }
   });
 
 export type SignedUploadRequestInput = z.infer<typeof signedUploadRequestSchema>;
@@ -126,7 +146,7 @@ export const mediaMetadataCreateSchema = z.object({
   mimeType: z.string().min(1).max(255),
   durationSeconds: z.number().int().min(0).optional(),
   isPrivate: z.boolean(),
-  usage: z.enum(['profile_image', 'listing_media', 'verification_document', 'general']),
+  usage: z.enum(['profile_image', 'listing_media', 'verification_document', 'post_media', 'general']),
 });
 
 export type MediaMetadataCreateInput = z.infer<typeof mediaMetadataCreateSchema>;

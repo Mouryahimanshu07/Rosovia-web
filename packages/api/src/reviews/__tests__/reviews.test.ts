@@ -236,6 +236,10 @@ describe('Reviews Service & Target Constraints', () => {
         rating_count: 0,
         total_orders: 0,
         total_followers: 0,
+        cover_image_url: null,
+        headline: null,
+        website_url: null,
+        profile_theme: null,
         created_at: '',
         updated_at: '',
         deleted_at: null,
@@ -273,10 +277,13 @@ describe('Reviews Service & Target Constraints', () => {
         comment: '',
         media_id: null,
         is_hidden: true,
+        creator_reply: null,
+        creator_replied_at: null,
         created_at: '',
         updated_at: '',
         deleted_at: null,
       });
+
 
       const res = await hideReviewAsAdmin(mockSupabase as SupabaseClient, {
         reviewId: REVIEW_ID,

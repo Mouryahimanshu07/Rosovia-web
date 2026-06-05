@@ -174,6 +174,34 @@ export async function createCurrentUserCustomOrder(
     delivery_state: validatedInput.deliveryState ?? null,
   });
 
+  // Link or create a conversation for this custom order request
+  try {
+    const { getOrCreateConversationForCurrentUser } = await import('../messages/message.service');
+    const { createMessage, updateConversationLastMessageAt } = await import('../messages/message.repository');
+
+    const conversation = await getOrCreateConversationForCurrentUser(supabase, {
+      creatorId: validatedInput.creatorId,
+    });
+
+    // Link conversation_id to the custom order
+    await supabase
+      .from('custom_orders')
+      .update({ conversation_id: conversation.id })
+      .eq('id', order.id);
+
+    // Create a system message in the conversation summarizing the custom order
+    const systemBody = `📋 Custom Order Requested: "${validatedInput.title}"\n\n${validatedInput.description.substring(0, 200)}${validatedInput.description.length > 200 ? '…' : ''}`;
+    const msg = await createMessage(supabase, {
+      conversation_id: conversation.id,
+      sender_profile_id: profile.id,
+      body: systemBody,
+    });
+    await updateConversationLastMessageAt(supabase, conversation.id, msg.created_at);
+  } catch (conversationError) {
+    // Non-fatal: custom order still created even if conversation linking fails
+    console.error('Failed to link conversation to custom order:', conversationError);
+  }
+
   try {
     await createSystemNotification(supabase, {
       recipientProfileId: creatorRecord.user_id,
@@ -189,6 +217,7 @@ export async function createCurrentUserCustomOrder(
 
   return order;
 }
+
 
 // ---------------------------------------------------------------------------
 // Buyer: list own custom orders

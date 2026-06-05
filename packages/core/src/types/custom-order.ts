@@ -40,6 +40,7 @@ export interface CustomOrder {
   creator_quote_amount: number | null;
   creator_quote_note: string | null;
   status: CustomOrderStatus;
+  conversation_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

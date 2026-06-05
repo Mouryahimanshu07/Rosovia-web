@@ -17,6 +17,10 @@ export const creatorProfileFormSchema = z.object({
   country: z.string().min(1, 'Country is required').optional(),
   profileImageUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  coverImageUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  headline: z.string().max(100, 'Headline is too long').optional(),
+  websiteUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  profileTheme: z.string().max(30).optional(),
 });
 
 /**
@@ -35,6 +39,10 @@ export const creatorProfileCreateSchema = z.object({
   country: z.string().default('India'),
   profileImageUrl: z.string().url().optional(),
   introVideoUrl: z.string().url().optional(),
+  coverImageUrl: z.string().url().optional(),
+  headline: z.string().max(100).optional(),
+  websiteUrl: z.string().url().optional(),
+  profileTheme: z.string().max(30).optional(),
 });
 
 export const creatorProfileUpdateSchema = creatorProfileCreateSchema.partial();

@@ -10,11 +10,14 @@ import { ALLOWED_IMAGE_MIME_TYPES, ALLOWED_VIDEO_MIME_TYPES, ALLOWED_DOCUMENT_MI
 // ---------------------------------------------------------------------------
 
 function getAllowedMimeTypes(usage: MediaUsage, accept?: string): string[] {
-  if (accept) return [accept];
+  if (accept) {
+    return accept.split(',').map((t) => t.trim());
+  }
   switch (usage) {
     case 'profile_image':
       return [...ALLOWED_IMAGE_MIME_TYPES];
     case 'listing_media':
+    case 'post_media':
       return [...ALLOWED_IMAGE_MIME_TYPES, ...ALLOWED_VIDEO_MIME_TYPES];
     case 'verification_document':
       return [...ALLOWED_DOCUMENT_MIME_TYPES];
@@ -23,11 +26,23 @@ function getAllowedMimeTypes(usage: MediaUsage, accept?: string): string[] {
   }
 }
 
+function matchMimeType(fileType: string, pattern: string): boolean {
+  const [fileGroup, fileSub] = fileType.split('/');
+  const [patternGroup, patternSub] = pattern.split('/');
+  if (!fileGroup || !patternGroup) return false;
+  if (patternGroup === '*' || fileGroup === patternGroup) {
+    return patternSub === '*' || fileSub === patternSub || !patternSub;
+  }
+  return false;
+}
+
 function getMaxSizeBytes(usage: MediaUsage, maxSizeBytes?: number): number {
   if (maxSizeBytes !== undefined) return maxSizeBytes;
   switch (usage) {
     case 'profile_image': return MAX_SIZE.profile_image;
-    case 'listing_media': return MAX_SIZE.listing_media_video; // worst-case for mixed
+    case 'listing_media':
+    case 'post_media':
+      return MAX_SIZE.listing_media_video; // worst-case for mixed
     case 'verification_document': return MAX_SIZE.verification_document;
     default: return MAX_SIZE.general;
   }
@@ -93,7 +108,8 @@ export function MediaUpload({
     setState('validating');
 
     // ── Client-side validation ──────────────────────────────────────────────
-    if (!allowedMimeTypes.includes(file.type)) {
+    const isAllowed = allowedMimeTypes.some((pattern) => matchMimeType(file.type, pattern));
+    if (!isAllowed) {
       setErrorMsg(`Unsupported file type: ${file.type}.`);
       setState('error');
       return;

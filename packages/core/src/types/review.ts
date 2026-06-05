@@ -13,6 +13,8 @@ export interface Review {
   comment: string | null;
   media_id: string | null;
   is_hidden: boolean;
+  creator_reply: string | null;
+  creator_replied_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

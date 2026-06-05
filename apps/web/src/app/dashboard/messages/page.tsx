@@ -6,6 +6,7 @@ import {
   listCurrentUserConversations,
   listCurrentUserMessages,
   getConversationById,
+  getOrCreateConversationForCurrentUser,
 } from '@rosovia/api';
 import type { Conversation, MessageWithSender } from '@rosovia/core';
 import { DashboardShell } from '@rosovia/ui';
@@ -23,6 +24,7 @@ interface MessagesPageProps {
   searchParams: {
     id?: string;
     role?: 'buyer' | 'creator';
+    creator?: string;
   };
 }
 
@@ -32,6 +34,18 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
 
   if (!profile) redirect('/login');
   if (profile.status !== 'active') redirect('/login?error=account_suspended');
+
+  // Handle message creator entry point
+  if (searchParams.creator) {
+    try {
+      const convo = await getOrCreateConversationForCurrentUser(supabase, {
+        creatorId: searchParams.creator,
+      });
+      redirect(`/dashboard/messages?id=${convo.id}${searchParams.role ? `&role=${searchParams.role}` : ''}`);
+    } catch (err) {
+      console.error('Failed to get/create conversation for creator entry point:', err);
+    }
+  }
 
   // Determine active view role (default to profile's role, but allow creators to toggle to buyer inbox)
   const isCreatorView = profile.role === 'creator' && searchParams.role !== 'buyer';
@@ -200,6 +214,16 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
                       )}
                     </p>
                   </div>
+
+                  {currentRole === 'buyer' && conversations.find((c) => c.id === activeId)?.creator_slug && (
+                    <Link
+                      href={`/creators/${conversations.find((c) => c.id === activeId)?.creator_slug}#custom-order-panel`}
+                      target="_blank"
+                      className="inline-flex items-center gap-1 text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 px-3.5 py-2 rounded-full transition-all shadow-sm active:scale-95 duration-150"
+                    >
+                      🎨 Custom Order
+                    </Link>
+                  )}
                 </div>
 
                 {/* Email Masking notice */}

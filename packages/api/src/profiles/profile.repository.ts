@@ -77,3 +77,53 @@ export async function updateProfileStatus(
     throw new Error(`Failed to update profile status: ${error.message}`);
   }
 }
+
+/**
+ * Fetches a profile by its unique username.
+ * Returns null if not found.
+ */
+export async function getProfileByUsername(
+  supabase: SupabaseClient,
+  username: string
+): Promise<Profile | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('username', username)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to fetch profile by username: ${error.message}`);
+  return data as Profile | null;
+}
+
+/**
+ * Updates an authenticated user's base profile fields.
+ * Direct RLS matches authUserId.
+ */
+export async function updateProfileByAuthUserId(
+  supabase: SupabaseClient,
+  authUserId: string,
+  data: Partial<{
+    full_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+    cover_image_url: string | null;
+    bio: string | null;
+    city: string | null;
+    state: string | null;
+    country: string;
+    language: string | null;
+  }>
+): Promise<Profile> {
+  const { data: updated, error } = await supabase
+    .from('profiles')
+    .update(data)
+    .eq('auth_user_id', authUserId)
+    .select('*')
+    .single();
+
+  if (error) throw new Error(`Failed to update user profile: ${error.message}`);
+  return updated as Profile;
+}
+
