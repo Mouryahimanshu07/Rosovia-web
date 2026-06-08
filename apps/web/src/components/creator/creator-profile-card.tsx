@@ -3,6 +3,7 @@ import Image from 'next/image';
 import type { CreatorProfileWithCategory } from '@rosovia/core';
 import { VerificationBadge } from './verification-badge';
 import { RatingSummary } from './rating-summary';
+import { ProfileTalentChips } from '../profile/ProfileTalentChips';
 
 interface CreatorProfileCardProps {
   profile: CreatorProfileWithCategory;
@@ -40,11 +41,12 @@ export function CreatorProfileCard({ profile }: CreatorProfileCardProps) {
           <p className="font-semibold text-gray-900 truncate group-hover:text-indigo-700 transition-colors">
             {profile.display_name}
           </p>
-          {profile.category_name ? (
-            <p className="text-xs text-gray-500 truncate">{profile.category_name}</p>
-          ) : (
-            <p className="text-xs text-indigo-600 font-semibold truncate capitalize">{(profile as any).role || 'Member'}</p>
-          )}
+          <ProfileTalentChips
+            categoryName={profile.category_name}
+            skills={profile.skills}
+            isOwner={false}
+            limit={2}
+          />
         </div>
       </div>
 

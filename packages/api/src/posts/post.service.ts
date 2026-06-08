@@ -187,16 +187,30 @@ export async function updateCreatorPost(
 export async function deleteCreatorPost(
   supabase: SupabaseClient,
   postId: string
-): Promise<void> {
-  const { creatorProfile } = await resolveActiveCreatorProfile(supabase);
+): Promise<{ success: true; deletedPostId: string } | { success: false; error: string }> {
+  try {
+    const { creatorProfile } = await resolveActiveCreatorProfile(supabase);
 
-  const post = await getPostById(supabase, postId);
-  if (!post) throw new Error('Post not found');
-  if (post.creator_profile_id !== creatorProfile.id) {
-    throw new Error('You do not own this post');
+    const post = await getPostById(supabase, postId);
+    if (!post) {
+      return { success: false, error: 'Post not found' };
+    }
+    if (post.creator_profile_id !== creatorProfile.id) {
+      return { success: false, error: 'You are not allowed to delete this post.' };
+    }
+
+    await softDeletePost(supabase, postId);
+    return { success: true, deletedPostId: postId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('row-level security policy') || msg.includes('violates row-level security')) {
+      return { success: false, error: 'You are not allowed to delete this post.' };
+    }
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to delete post',
+    };
   }
-
-  await softDeletePost(supabase, postId);
 }
 
 // ---------------------------------------------------------------------------

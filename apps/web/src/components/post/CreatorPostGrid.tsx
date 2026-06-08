@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import type { CreatorPostWithDetails } from '@rosovia/core';
 import { CreatorPostCard } from './CreatorPostCard';
 import { LayoutGrid } from 'lucide-react';
@@ -10,11 +13,21 @@ interface CreatorPostGridProps {
 }
 
 export function CreatorPostGrid({
-  posts,
+  posts: initialPosts,
   showCreator = true,
   emptyMessage = 'No work posts yet.',
   isOwnDashboard = false,
 }: CreatorPostGridProps) {
+  const [posts, setPosts] = useState(initialPosts);
+
+  useEffect(() => {
+    setPosts(initialPosts);
+  }, [initialPosts]);
+
+  const handleDelete = (postId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+  };
+
   if (posts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
@@ -34,6 +47,7 @@ export function CreatorPostGrid({
           post={post}
           showCreator={showCreator}
           isOwnDashboard={isOwnDashboard}
+          onDelete={handleDelete}
         />
       ))}
     </div>

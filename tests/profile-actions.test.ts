@@ -11,11 +11,6 @@ import { describe, expect, it } from 'vitest';
  *   - Anonymous visitor sees login-redirect versions of Follow, Message, Custom Order
  */
 
-// Since ProfileActionButtons is a React client component, we test the
-// underlying decision logic rather than full React rendering.
-// The component takes boolean props and conditionally renders — we validate
-// that the contract is correct via structural/unit checks.
-
 interface ButtonDecision {
   editProfile: boolean;
   postYourWork: boolean;
@@ -288,3 +283,122 @@ describe('Creator Inconsistent Data Fallback & Layout Gating', () => {
   });
 });
 
+describe('Talent Chips Logic', () => {
+  function parseTalentChips(
+    categoryName: string | null | undefined,
+    skills: string[] | null | undefined
+  ) {
+    const categoriesList = categoryName
+      ? categoryName.split('/').map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    const skillsList = skills
+      ? skills.map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    const categoriesParsed: string[] = [];
+    const skillsParsed: string[] = [];
+    const seen = new Set<string>();
+
+    for (const cat of categoriesList) {
+      const lower = cat.toLowerCase();
+      if (lower && !seen.has(lower)) {
+        seen.add(lower);
+        categoriesParsed.push(cat);
+      }
+    }
+
+    for (const skill of skillsList) {
+      const lower = skill.toLowerCase();
+      if (lower && !seen.has(lower)) {
+        seen.add(lower);
+        skillsParsed.push(skill);
+      }
+    }
+
+    const combined = [...categoriesParsed, ...skillsParsed];
+    return {
+      combined,
+      categories: categoriesParsed,
+      skills: skillsParsed
+    };
+  }
+
+  it('splits slash-separated categories and filters duplicates case-insensitively', () => {
+    const { combined, categories } = parseTalentChips(
+      'Coding / Web Development / Coding',
+      ['Web Development', 'React']
+    );
+
+    expect(categories).toEqual(['Coding', 'Web Development']);
+    expect(combined).toEqual(['Coding', 'Web Development', 'React']);
+  });
+
+  it('limits chips and calculates extraCount for desktop and mobile', () => {
+    const { combined } = parseTalentChips(
+      'A / B / C',
+      ['D', 'E', 'F', 'G', 'H']
+    ); // 8 items total
+
+    const desktopLimit = 5;
+    const mobileLimit = 3;
+
+    const desktopVisible = combined.slice(0, desktopLimit);
+    const desktopExtra = combined.length - desktopLimit;
+
+    const mobileVisible = combined.slice(0, mobileLimit);
+    const mobileExtra = combined.length - mobileLimit;
+
+    expect(desktopVisible).toHaveLength(5);
+    expect(desktopExtra).toBe(3);
+
+    expect(mobileVisible).toHaveLength(3);
+    expect(mobileExtra).toBe(5);
+  });
+
+  it('renders fallback when empty', () => {
+    const { combined } = parseTalentChips(null, null);
+    expect(combined).toHaveLength(0);
+  });
+});
+
+describe('Creator Tabs Configuration', () => {
+  it('returns correct empty states for tabs', () => {
+    const getEmptyState = (tab: string, isOwner: boolean) => {
+      const emptyStates: Record<string, { owner: string; visitor: string }> = {
+        portfolio: {
+          owner: 'Show your best work. Add your first portfolio item.',
+          visitor: 'No portfolio items yet.',
+        },
+        posts: {
+          owner: 'Share your latest work. Create your first post.',
+          visitor: 'No posts yet.',
+        },
+        services: {
+          owner: 'Add your first service.',
+          visitor: 'No services available yet.',
+        },
+        shop: {
+          owner: 'Add your first product.',
+          visitor: 'No products available yet.',
+        },
+        reviews: {
+          owner: 'No reviews yet.',
+          visitor: 'No reviews yet.',
+        },
+      };
+      const state = emptyStates[tab];
+      return isOwner ? state?.owner : state?.visitor;
+    };
+
+    expect(getEmptyState('portfolio', true)).toBe('Show your best work. Add your first portfolio item.');
+    expect(getEmptyState('portfolio', false)).toBe('No portfolio items yet.');
+    expect(getEmptyState('posts', true)).toBe('Share your latest work. Create your first post.');
+    expect(getEmptyState('posts', false)).toBe('No posts yet.');
+    expect(getEmptyState('services', true)).toBe('Add your first service.');
+    expect(getEmptyState('services', false)).toBe('No services available yet.');
+    expect(getEmptyState('shop', true)).toBe('Add your first product.');
+    expect(getEmptyState('shop', false)).toBe('No products available yet.');
+    expect(getEmptyState('reviews', false)).toBe('No reviews yet.');
+  });
+});

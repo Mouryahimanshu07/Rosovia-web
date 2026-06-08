@@ -21,6 +21,7 @@ import type { ListingWithDetails, CreatorProfileWithCategory } from '@rosovia/co
 import { ProfileActionButtons } from '~/components/profile/ProfileActionButtons';
 import { CreatorTabs } from '~/components/creator/creator-tabs';
 import { VerificationBadge } from '~/components/creator/verification-badge';
+import { ProfileTalentChips } from '~/components/profile/ProfileTalentChips';
 
 export const dynamic = 'force-dynamic';
 
@@ -157,6 +158,9 @@ export default async function UserPublicProfilePage({ params }: Props) {
     };
   }
 
+  const postsCount = creatorTabsData?.workPosts?.length ?? 0;
+  const servicesCount = creatorTabsData?.services?.length ?? 0;
+
   // Formatting helpers
   const joinedDate = new Date(baseProfile.created_at).toLocaleDateString('en-US', {
     month: 'long',
@@ -165,30 +169,30 @@ export default async function UserPublicProfilePage({ params }: Props) {
   
   const location = [baseProfile.city, baseProfile.state, baseProfile.country].filter(Boolean).join(', ');
 
+  // Bio fallbacks
+  const bioText = baseProfile.bio 
+    ? baseProfile.bio 
+    : isOwnProfile 
+      ? 'Add a short bio to tell people about your work.'
+      : 'No bio yet.';
+
   return (
-    <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8 animate-fadeIn">
-      {/* ── PROFILE HERO BANNER SECTION ──────────────────────── */}
-      <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 relative">
-        {/* Cover Banner */}
-        <div className="w-full h-44 sm:h-64 relative bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 flex items-center justify-center overflow-hidden">
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6 animate-fadeIn">
+      {/* ── MAIN PROFILE CARD CONTAINER ──────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm relative">
+        {/* Cover Banner (No text overlay) */}
+        <div className="w-full h-[160px] md:h-[240px] relative bg-gradient-to-r from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden">
           {baseProfile.cover_image_url ? (
             <Image
               src={baseProfile.cover_image_url}
-              alt={`${baseProfile.full_name || baseProfile.username} cover banner`}
+              alt="cover banner"
               fill
               unoptimized
-              className="object-cover opacity-90 transition-transform duration-700 hover:scale-105"
+              className="object-cover"
               priority
             />
           ) : (
-            <>
-              {/* Glassmorphic Background Shapes */}
-              <div className="absolute top-[-20%] left-[-10%] w-72 h-72 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute bottom-[-30%] right-[-10%] w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/5 font-black text-6xl tracking-widest pointer-events-none select-none uppercase">
-                {creatorProfile?.category_name ?? 'ROSOVIA'}
-              </div>
-            </>
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-50 to-purple-50" />
           )}
 
           {creatorProfile?.website_url && (
@@ -196,9 +200,9 @@ export default async function UserPublicProfilePage({ params }: Props) {
               href={creatorProfile.website_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="absolute top-4 right-4 bg-black/40 backdrop-blur-md text-white hover:bg-black/60 px-4 py-1.5 rounded-full text-xs font-bold transition-all border border-white/10 flex items-center gap-1.5 shadow-sm"
+              className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 px-4 py-1.5 rounded-full text-xs font-bold transition-all border border-white/10 flex items-center gap-1.5 shadow-sm"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
               Website
@@ -206,12 +210,13 @@ export default async function UserPublicProfilePage({ params }: Props) {
           )}
         </div>
 
-        {/* Identity Overlay Area */}
-        <div className="px-6 pb-6 pt-4 sm:px-8 relative flex flex-col sm:flex-row items-center sm:items-end sm:justify-between gap-4">
-          {/* Avatar & User details */}
-          <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 -mt-16 sm:-mt-24 z-10">
-            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl bg-white p-1.5 shadow-xl border border-gray-100 flex-shrink-0 relative overflow-hidden transition-all duration-300 hover:scale-[1.02]">
-              <div className="w-full h-full rounded-2xl overflow-hidden relative bg-indigo-50 border border-gray-100">
+        {/* White Identity Panel below cover */}
+        <div className="px-6 pb-6 pt-4 md:px-8 flex flex-col md:flex-row items-center md:items-start md:justify-between gap-6">
+          {/* Avatar and Identity Details */}
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-5 w-full">
+            {/* Avatar overlapping cover by 60px */}
+            <div className="-mt-[60px] md:-mt-[90px] w-24 h-24 md:w-[140px] md:h-[140px] rounded-full bg-white p-1 shadow-md border-4 border-white flex-shrink-0 relative overflow-hidden">
+              <div className="w-full h-full rounded-full overflow-hidden relative bg-indigo-50">
                 {baseProfile.avatar_url ? (
                   <Image
                     src={baseProfile.avatar_url}
@@ -222,16 +227,17 @@ export default async function UserPublicProfilePage({ params }: Props) {
                     priority
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-5xl font-black text-indigo-300 bg-indigo-50/50">
+                  <div className="w-full h-full flex items-center justify-center text-4xl md:text-5xl font-black text-indigo-300 bg-gradient-to-br from-indigo-50 to-purple-50">
                     {(baseProfile.full_name || baseProfile.username || 'R').charAt(0).toUpperCase()}
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="text-center sm:text-left space-y-1.5">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap justify-center sm:justify-start">
-                <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight leading-none">
+            {/* Middle details (completely on white background) */}
+            <div className="text-center md:text-left space-y-1.5 flex-1 min-w-0">
+              <div className="flex items-center justify-center md:justify-start gap-1.5 flex-wrap">
+                <h1 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight leading-tight">
                   {baseProfile.full_name || baseProfile.username}
                 </h1>
                 {creatorProfile && (
@@ -239,26 +245,28 @@ export default async function UserPublicProfilePage({ params }: Props) {
                 )}
               </div>
               
-              <div className="flex items-center justify-center sm:justify-start gap-2 text-sm text-gray-500 font-semibold">
-                <span>@{baseProfile.username}</span>
+              <div className="flex items-center justify-center md:justify-start gap-2 text-xs md:text-sm text-gray-500 font-semibold flex-wrap">
+                <span className="text-indigo-650">@{baseProfile.username}</span>
                 <span>•</span>
-                <span className="capitalize px-2 py-0.5 rounded-full bg-gray-100 text-[10px] font-extrabold text-gray-600">
+                <span className="capitalize px-2 py-0.5 rounded-full bg-indigo-50 text-[10px] font-extrabold text-indigo-700 border border-indigo-100/50">
                   {baseProfile.role}
                 </span>
-                {creatorProfile?.category_name && (
-                  <>
-                    <span>•</span>
-                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-[10px] font-extrabold text-indigo-600">
-                      {creatorProfile.category_name}
-                    </span>
-                  </>
-                )}
               </div>
+
+              {/* Talent Chips */}
+              {isCreator && (
+                <ProfileTalentChips
+                  categoryName={creatorProfile?.category_name}
+                  skills={creatorProfile?.skills}
+                  isOwner={isOwnProfile}
+                  username={baseProfile.username || undefined}
+                />
+              )}
             </div>
           </div>
 
-          {/* Action CTAs: Owner vs Visitor buttons */}
-          <div className="flex items-center gap-3 z-10 w-full sm:w-auto justify-center">
+          {/* Right Action buttons */}
+          <div className="z-10 w-full md:w-auto shrink-0 flex justify-center md:justify-end">
             <ProfileActionButtons
               isOwner={isOwnProfile}
               isAuthenticated={!!user}
@@ -272,48 +280,154 @@ export default async function UserPublicProfilePage({ params }: Props) {
           </div>
         </div>
 
-        {/* Info Grid (Follow Stats, Location, Joined Date, Bio) */}
-        <div className="px-6 pb-6 pt-2 border-t border-gray-100 sm:px-8 grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-50/30">
-          {/* Left Column: Stats & Location */}
-          <div className="space-y-3.5 text-sm font-semibold">
-            {/* Follow stats */}
-            <div className="flex items-center gap-5 text-gray-700">
-              <Link href={`/u/${baseProfile.username}/followers`} className="hover:text-indigo-600 transition">
-                <span className="text-gray-900 font-extrabold text-base">{followStats.followersCount}</span>{' '}
-                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Followers</span>
-              </Link>
-              <Link href={`/u/${baseProfile.username}/following`} className="hover:text-indigo-600 transition">
-                <span className="text-gray-900 font-extrabold text-base">{followStats.followingCount}</span>{' '}
-                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Following</span>
-              </Link>
-            </div>
-
-            {/* Location & Joined Date */}
-            <div className="space-y-2 text-gray-500 text-xs font-bold uppercase tracking-wider">
-              {location && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                  <span>{location}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                <span>Joined {joinedDate}</span>
-              </div>
-            </div>
+        {/* Compact Stats Row (Desktop horizontal; Mobile 2x2 grid) */}
+        <div className="border-t border-gray-100 py-3 px-6 md:px-8 bg-gray-50/15 grid grid-cols-2 md:flex md:flex-row md:items-center md:justify-start gap-y-2.5 gap-x-8 md:gap-x-12">
+          <div className="flex items-baseline gap-1.5 justify-center md:justify-start">
+            <span className="text-base font-bold text-gray-900 leading-none">{postsCount}</span>
+            <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Posts</span>
           </div>
+          <Link href={`/u/${baseProfile.username}/followers`} className="flex items-baseline gap-1.5 justify-center md:justify-start hover:text-indigo-650 transition">
+            <span className="text-base font-bold text-gray-900 leading-none">{followStats.followersCount}</span>
+            <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Followers</span>
+          </Link>
+          <Link href={`/u/${baseProfile.username}/following`} className="flex items-baseline gap-1.5 justify-center md:justify-start hover:text-indigo-650 transition">
+            <span className="text-base font-bold text-gray-900 leading-none">{followStats.followingCount}</span>
+            <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Following</span>
+          </Link>
+          {isCreator && (
+            <div className="flex items-baseline gap-1.5 justify-center md:justify-start">
+              <span className="text-base font-bold text-gray-900 leading-none">{servicesCount}</span>
+              <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Services</span>
+            </div>
+          )}
+        </div>
+      </div>
 
-          {/* Right Column: Short Bio */}
-          <div className="md:col-span-2 space-y-2">
-            <h3 className="text-xs font-black uppercase tracking-widest text-indigo-600">Bio</h3>
-            <p className="text-gray-600 leading-relaxed text-sm whitespace-pre-line">
-              {baseProfile.bio || `${baseProfile.full_name || baseProfile.username} hasn't written a biography yet.`}
-            </p>
+      {/* ── ABOUT AND DETAILS SECTION ────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Left/Middle: About card */}
+        <div className="md:col-span-2 bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-3 text-left">
+          <h3 className="text-xs font-black uppercase tracking-wider text-indigo-600">About</h3>
+          <p className="text-gray-600 leading-relaxed text-sm whitespace-pre-line">
+            {bioText}
+          </p>
+        </div>
+
+        {/* Right: Details card */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4 text-left flex flex-col justify-center">
+          <h3 className="text-xs font-black uppercase tracking-wider text-gray-400">Details</h3>
+          
+          <div className="space-y-3 text-sm text-gray-600 font-semibold">
+            {/* Availability Badge */}
+            {isCreator && (
+              <div className="flex items-center gap-2 text-emerald-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs uppercase font-extrabold tracking-wider">Available for work</span>
+              </div>
+            )}
+
+            {location && (
+              <div className="flex items-center gap-2.5">
+                <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <span>{location}</span>
+              </div>
+            )}
+            
+            <div className="flex items-center gap-2.5">
+              <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              <span>Joined {joinedDate}</span>
+            </div>
+
+            {creatorProfile && creatorProfile.languages && creatorProfile.languages.length > 0 && (
+              <div className="flex items-start gap-2.5">
+                <svg className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 11.37 7.31 16.5 3 19" />
+                </svg>
+                <span>Languages: <span className="text-gray-900 font-bold">{creatorProfile.languages.join(', ')}</span></span>
+              </div>
+            )}
+
+            {creatorProfile && creatorProfile.total_orders > 0 && (
+              <div className="flex items-center gap-2.5">
+                <svg className="h-4 w-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+                </svg>
+                <span>{creatorProfile.total_orders} Orders Completed</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* ── ENHANCED CREATOR SECTIONS ────────────────────────── */}
+      {/* ── AVAILABILITY BANNER SECTION ────────────────────────── */}
+      {isCreator && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg relative shrink-0">
+              ⚡
+              <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full animate-pulse" />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-black text-gray-900">Available for custom work</h4>
+              <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">Need a custom quote? Let&apos;s talk about your requirements.</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+            {isOwnProfile ? (
+              <>
+                <Link
+                  href={`/u/${baseProfile.username}/edit`}
+                  className="w-full sm:w-auto text-center px-4 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 shadow-sm transition active:scale-95 whitespace-nowrap"
+                >
+                  Edit availability
+                </Link>
+                <a
+                  href="/dashboard/creator/listings"
+                  className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-750 hover:bg-indigo-100 shadow-sm transition active:scale-95 whitespace-nowrap"
+                >
+                  Manage services
+                </a>
+              </>
+            ) : (
+              <>
+                {user ? (
+                  <a
+                    href="#custom-order-panel"
+                    className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition active:scale-95 whitespace-nowrap"
+                  >
+                    Request Custom Order
+                  </a>
+                ) : (
+                  <Link
+                    href={`/login?redirected_from=/u/${baseProfile.username}`}
+                    className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition active:scale-95 whitespace-nowrap"
+                  >
+                    Request Custom Order
+                  </Link>
+                )}
+                {user ? (
+                  <Link
+                    href={`/dashboard/messages?new_chat_with_user_id=${baseProfile.id}`}
+                    className="w-full sm:w-auto text-center px-4 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 shadow-sm transition active:scale-95 whitespace-nowrap"
+                  >
+                    Message Creator
+                  </Link>
+                ) : (
+                  <Link
+                    href={`/login?redirected_from=/u/${baseProfile.username}`}
+                    className="w-full sm:w-auto text-center px-4 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 shadow-sm transition active:scale-95 whitespace-nowrap"
+                  >
+                    Message Creator
+                  </Link>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── CREATOR TABS SECTION ─────────────────────────────── */}
       {creatorProfile && creatorTabsData && (
         <section className="space-y-6">
           <CreatorTabs

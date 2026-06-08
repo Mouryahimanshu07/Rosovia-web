@@ -84,7 +84,11 @@ export async function updatePostAction(
 export async function deletePostAction(postId: string): Promise<ActionResult> {
   try {
     const supabase = createWebServerClient();
-    await deleteCreatorPost(supabase, postId);
+    const result = await deleteCreatorPost(supabase, postId);
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
 
     revalidatePath('/dashboard/creator/posts');
     revalidatePath('/explore');

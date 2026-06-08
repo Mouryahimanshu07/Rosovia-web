@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import type { CreatorProfileWithCategory, ListingWithDetails, MediaAsset, ReviewWithDetails, CollectionWithItems, CreatorPostWithDetails } from '@rosovia/core';
 import { RatingSummary } from './rating-summary';
 import { ListingCard } from '../listing/listing-card';
 import { ReviewList } from '../review/review-list';
 import { InquiryForm } from '../inquiry/inquiry-form';
 import { CustomOrderForm } from '../custom-order/custom-order-form';
-import { ReportButton } from '../report/report-button';
 import { CreatorPostGrid } from '../post/CreatorPostGrid';
 
 interface CreatorTabsProps {
@@ -41,6 +42,7 @@ export function CreatorTabs({
   username,
 }: CreatorTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('portfolio');
+  const [activeMedia, setActiveMedia] = useState<MediaAsset | null>(null);
 
   // Smooth anchor scrolling for custom order requests
   useEffect(() => {
@@ -81,59 +83,43 @@ export function CreatorTabs({
   });
 
   const tabClass = (tab: TabType) =>
-    `flex items-center gap-2 py-3.5 px-3 border-b-2 font-bold text-sm transition-all duration-300 whitespace-nowrap cursor-pointer select-none rounded-t-xl hover:bg-slate-50/50 ${
+    `flex items-center gap-1.5 py-4 px-1 border-b-2 font-bold text-xs sm:text-sm transition-all duration-200 whitespace-nowrap cursor-pointer select-none ${
       activeTab === tab
-        ? 'border-indigo-600 text-indigo-600 bg-indigo-50/10'
-        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        ? 'border-indigo-600 text-indigo-650 font-black'
+        : 'border-transparent text-gray-500 hover:text-gray-700'
     }`;
+
+  const renderBadge = (count: number, tab: TabType) => (
+    <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+      activeTab === tab ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-500'
+    }`}>
+      {count}
+    </span>
+  );
 
   return (
     <div className="space-y-8">
-      {/* Premium Navigation Bar */}
-      <div className="border-b border-gray-200 overflow-x-auto scrollbar-none bg-white rounded-2xl px-3 shadow-sm border">
-        <nav className="flex space-x-4 min-w-max" aria-label="Tabs">
+      {/* Navigation Bar (Horizontally scrollable on mobile, active tab underline) */}
+      <div className="overflow-x-auto scrollbar-none bg-white rounded-2xl px-5 border border-gray-200 shadow-sm">
+        <nav className="flex space-x-6 min-w-max" aria-label="Tabs">
           <button onClick={() => setActiveTab('portfolio')} className={tabClass('portfolio')}>
             <span>Portfolio</span>
-            {portfolioCount > 0 && (
-              <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                activeTab === 'portfolio' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {portfolioCount}
-              </span>
-            )}
+            {portfolioCount > 0 && renderBadge(portfolioCount, 'portfolio')}
           </button>
 
           <button onClick={() => setActiveTab('posts')} className={tabClass('posts')}>
             <span>Posts</span>
-            {postsCount > 0 && (
-              <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                activeTab === 'posts' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {postsCount}
-              </span>
-            )}
+            {postsCount > 0 && renderBadge(postsCount, 'posts')}
           </button>
 
           <button onClick={() => setActiveTab('services')} className={tabClass('services')}>
             <span>Services</span>
-            {servicesCount > 0 && (
-              <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                activeTab === 'services' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {servicesCount}
-              </span>
-            )}
+            {servicesCount > 0 && renderBadge(servicesCount, 'services')}
           </button>
 
           <button onClick={() => setActiveTab('shop')} className={tabClass('shop')}>
             <span>Shop</span>
-            {shopCount > 0 && (
-              <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                activeTab === 'shop' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {shopCount}
-              </span>
-            )}
+            {shopCount > 0 && renderBadge(shopCount, 'shop')}
           </button>
 
           <button onClick={() => setActiveTab('custom_order')} className={tabClass('custom_order')}>
@@ -142,13 +128,7 @@ export function CreatorTabs({
 
           <button onClick={() => setActiveTab('reviews')} className={tabClass('reviews')}>
             <span>Reviews</span>
-            {reviewsCount > 0 && (
-              <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                activeTab === 'reviews' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {reviewsCount}
-              </span>
-            )}
+            {reviewsCount > 0 && renderBadge(reviewsCount, 'reviews')}
           </button>
         </nav>
       </div>
@@ -172,43 +152,87 @@ export function CreatorTabs({
             )}
 
             {/* Show General Portfolio Media Assets */}
-            {portfolioMedia.length > 0 ? (
+            {(portfolioMedia.length > 0 || isOwnProfile) ? (
               <div className="space-y-4">
                 <h3 className="text-base font-bold text-gray-800">Portfolio Gallery</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                  {portfolioMedia.map((media) => (
-                    <div
-                      key={media.id}
-                      className="group relative overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-md duration-300 cursor-pointer aspect-square"
+                  {/* Add Portfolio CTA Card (Owner only) */}
+                  {isOwnProfile && (
+                    <Link
+                      href="/dashboard/creator/listings/new"
+                      className="group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/20 transition-all duration-300 aspect-square p-6 text-center"
                     >
-                      {media.public_url ? (
-                        <div className="w-full h-full relative">
-                          <Image
-                            src={media.public_url}
-                            alt={media.mime_type}
-                            fill
-                            sizes="(max-width: 768px) 100vw, 33vw"
-                            className="object-cover transition duration-500 group-hover:scale-105"
-                          />
-                          {/* Hover display details */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                            <div className="text-white">
-                              <p className="text-xs uppercase font-bold tracking-widest text-indigo-300">
-                                {media.media_type}
-                              </p>
-                              <p className="text-sm font-semibold truncate max-w-full">
-                                {media.mime_type.split('/')[1]?.toUpperCase() ?? 'FILE'}
-                              </p>
+                      <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <Plus className="h-6 w-6" />
+                      </div>
+                      <span className="text-sm font-bold text-gray-800">Add Portfolio</span>
+                      <span className="text-xs text-gray-400 mt-1">Showcase your best work</span>
+                    </Link>
+                  )}
+
+                  {portfolioMedia.map((media) => {
+                    const isVideo = media.media_type === 'video' || media.mime_type.startsWith('video/');
+                    return (
+                      <div
+                        key={media.id}
+                        onClick={() => setActiveMedia(media)}
+                        className="group relative overflow-hidden rounded-2xl border border-gray-150 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-md duration-300 cursor-pointer aspect-square"
+                      >
+                        {media.public_url ? (
+                          <div className="w-full h-full relative">
+                            {isVideo ? (
+                              <div className="w-full h-full bg-gray-900 flex items-center justify-center relative">
+                                {media.thumbnail_url ? (
+                                  <Image
+                                    src={media.thumbnail_url}
+                                    alt={media.mime_type}
+                                    fill
+                                    sizes="(max-width: 768px) 100vw, 33vw"
+                                    className="object-cover opacity-80 group-hover:scale-105 transition-transform duration-500"
+                                    unoptimized
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-gray-955">
+                                    <span className="text-4xl text-gray-700">🎥</span>
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/25 transition-colors duration-300">
+                                  <div className="w-10 h-10 rounded-full bg-white/95 backdrop-blur flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                    <span className="text-gray-900 ml-0.5 text-xs">▶</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <Image
+                                src={media.public_url}
+                                alt={media.mime_type}
+                                fill
+                                sizes="(max-width: 768px) 100vw, 33vw"
+                                className="object-cover transition duration-500 group-hover:scale-105"
+                                unoptimized
+                              />
+                            )}
+                            
+                            {/* Hover details overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                              <div className="text-white">
+                                <p className="text-xs uppercase font-bold tracking-widest text-indigo-300">
+                                  {media.media_type}
+                                </p>
+                                <p className="text-sm font-semibold truncate max-w-full">
+                                  {media.mime_type.split('/')[1]?.toUpperCase() ?? 'FILE'}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-50 text-sm">
-                          Media file unreachable
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-50 text-sm">
+                            Media file unreachable
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ) : (
@@ -218,9 +242,9 @@ export function CreatorTabs({
                     🎨
                   </div>
                   <h3 className="text-base font-bold text-gray-800 mb-1">
-                    {isOwnProfile ? 'Add your first portfolio item' : 'No portfolio items yet'}
+                    {isOwnProfile ? 'Show your best work. Add your first portfolio item.' : 'No portfolio items yet.'}
                   </h3>
-                  <p className="text-sm text-gray-400 max-w-sm mx-auto mt-1">
+                  <p className="text-sm text-gray-405 max-w-sm mx-auto mt-1">
                     {isOwnProfile
                       ? 'Create a listing or upload media to showcase your work collections to visitors.'
                       : `${profile.display_name} hasn't uploaded any portfolio collections or media assets yet.`}
@@ -256,20 +280,20 @@ export function CreatorTabs({
                   📷
                 </div>
                 <h3 className="text-base font-bold text-gray-800 mb-1">
-                  {isOwnProfile ? 'Create your first work post' : 'No posts yet'}
+                  {isOwnProfile ? 'Share your latest work. Create your first post.' : 'No posts yet.'}
                 </h3>
-                <p className="text-sm text-gray-400 max-w-sm mx-auto mb-4">
+                <p className="text-sm text-gray-405 max-w-sm mx-auto mb-4">
                   {isOwnProfile
                     ? "Share behind-the-scenes, updates, or recent works with your followers."
                     : `${profile.display_name} hasn't shared any work posts yet.`}
                 </p>
                 {isOwnProfile && (
-                  <a
+                  <Link
                     href={`/u/${username || profile.slug}/posts/new`}
                     className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm"
                   >
                     Create Your First Post
-                  </a>
+                  </Link>
                 )}
               </div>
             )}
@@ -281,9 +305,83 @@ export function CreatorTabs({
           <div className="animate-fadeIn">
             {services.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {services.map((listing) => (
-                  <ListingCard key={listing.id} listing={listing} />
-                ))}
+                {services.map((listing) => {
+                  const deliveryDays = (listing.metadata as any)?.deliveryDays;
+                  return (
+                    <div
+                      key={listing.id}
+                      className="group flex flex-col justify-between bg-white rounded-2xl border border-gray-250 p-5 shadow-sm hover:shadow-md hover:border-indigo-150 transition-all duration-300"
+                    >
+                      <div className="space-y-3">
+                        {/* Category & Badge */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="capitalize px-2 py-0.5 rounded-md bg-indigo-50 text-[10px] font-extrabold text-indigo-705 border border-indigo-100">
+                            {listing.listing_type.replace('_', ' ')}
+                          </span>
+                          {listing.category_name && (
+                            <span className="text-xs text-gray-450 font-semibold">{listing.category_name}</span>
+                          )}
+                        </div>
+
+                        {/* Title */}
+                        <h4 className="font-extrabold text-gray-900 leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2 text-left">
+                          {listing.title}
+                        </h4>
+
+                        {/* Info Rows */}
+                        <div className="space-y-1.5 pt-1 text-left">
+                          {listing.price !== null ? (
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <span className="text-gray-500 font-medium">Starting at:</span>
+                              <span className="font-extrabold text-gray-900">
+                                {listing.currency} {listing.price.toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs italic text-gray-500 font-medium">Price on request</span>
+                          )}
+
+                          {deliveryDays !== undefined && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500 font-semibold">
+                              <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span>Delivered in {deliveryDays} day{deliveryDays > 1 ? 's' : ''}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Action CTA Buttons */}
+                      <div className="flex gap-2.5 mt-5 pt-3.5 border-t border-gray-100">
+                        <Link
+                          href={`/listings/${listing.slug}`}
+                          className="flex-1 text-center py-2 px-3 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 text-xs font-bold text-gray-700 transition"
+                        >
+                          View Service
+                        </Link>
+                        {!isOwnProfile && (
+                          user ? (
+                            <a
+                              href="#custom-order-panel"
+                              onClick={() => setActiveTab('custom_order')}
+                              className="flex-1 text-center py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition active:scale-95 whitespace-nowrap"
+                            >
+                              Request Custom Order
+                            </a>
+                          ) : (
+                            <Link
+                              href={`/login?redirected_from=/u/${username || profile.slug}`}
+                              className="flex-1 text-center py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition active:scale-95 whitespace-nowrap"
+                            >
+                              Request Custom Order
+                            </Link>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-16 bg-white rounded-xl border border-gray-100 shadow-sm">
@@ -291,9 +389,9 @@ export function CreatorTabs({
                   🛠️
                 </div>
                 <h3 className="text-base font-bold text-gray-800 mb-1">
-                  {isOwnProfile ? 'Add your first service' : 'No services available yet'}
+                  {isOwnProfile ? 'Add your first service.' : 'No services available yet.'}
                 </h3>
-                <p className="text-sm text-gray-400 max-w-sm mx-auto mt-1">
+                <p className="text-sm text-gray-405 max-w-sm mx-auto mt-1">
                   {isOwnProfile
                     ? 'Offer mentorships, consulting, customized services, or workshops.'
                     : `${profile.display_name} has not listed any services yet.`}
@@ -326,9 +424,9 @@ export function CreatorTabs({
                   🛍️
                 </div>
                 <h3 className="text-base font-bold text-gray-800 mb-1">
-                  {isOwnProfile ? 'Add your first product' : 'No products available yet'}
+                  {isOwnProfile ? 'Add your first product.' : 'No products available yet.'}
                 </h3>
-                <p className="text-sm text-gray-400 max-w-sm mx-auto mt-1">
+                <p className="text-sm text-gray-405 max-w-sm mx-auto mt-1">
                   {isOwnProfile
                     ? 'Sell digital assets, physical artwork, or downloadable resources.'
                     : `${profile.display_name} has not listed any products yet.`}
@@ -361,17 +459,27 @@ export function CreatorTabs({
                   </svg>
                 </div>
 
-                <div className="max-w-xl space-y-2 mb-6">
+                <div className="max-w-xl space-y-2 mb-6 text-left">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur text-[10px] font-extrabold uppercase tracking-widest text-indigo-200">
                     ⚡ Customized Commission
                   </span>
                   <h2 className="text-2xl font-black tracking-tight">Request a Custom Order</h2>
-                  <p className="text-xs text-indigo-100 leading-relaxed">
-                    Need something fully personalized or designed to fit a specific budget? Describe your project requirements and receive a premium tailored offer from {profile.display_name}.
+                  <p className="text-xs text-indigo-105 leading-relaxed">
+                    Need something fully personalized or designed to fit a specific budget? Describe your project requirements and receive a premium offer from {profile.display_name}.
                   </p>
                 </div>
 
-                {user ? (
+                {isOwnProfile ? (
+                  <div className="bg-white/5 backdrop-blur-md rounded-2xl p-8 text-center border border-white/10">
+                    <p className="text-sm font-semibold mb-4 text-indigo-105">You are viewing your own custom order page.</p>
+                    <Link
+                      href={`/u/${username || profile.slug}/edit`}
+                      className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-black text-indigo-650 hover:bg-indigo-50 shadow-md transition-all active:scale-95 duration-150"
+                    >
+                      Edit Custom Order Info
+                    </Link>
+                  </div>
+                ) : user ? (
                   <div className="bg-white rounded-2xl p-6 text-gray-900 shadow-xl border border-white/10">
                     <CustomOrderForm
                       creatorId={profile.id}
@@ -380,10 +488,10 @@ export function CreatorTabs({
                   </div>
                 ) : (
                   <div className="text-center py-8 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10">
-                    <p className="text-sm font-semibold mb-4 text-indigo-100">Please sign in to configure your custom requirements.</p>
+                    <p className="text-sm font-semibold mb-4 text-indigo-105">Please sign in to configure your custom requirements.</p>
                     <a
                       href={`/login?redirected_from=/creators/${profile.slug}#custom-order-panel`}
-                      className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-black text-indigo-600 hover:bg-indigo-50 shadow-md transition-all active:scale-95 duration-150"
+                      className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-black text-indigo-650 hover:bg-indigo-50 shadow-md transition-all active:scale-95 duration-150"
                     >
                       Sign in to Request Order
                     </a>
@@ -398,7 +506,7 @@ export function CreatorTabs({
                 <h3 className="text-base font-bold text-gray-800 mb-1">
                   {isOwnProfile ? 'Enable Custom Orders' : 'No custom orders available yet'}
                 </h3>
-                <p className="text-sm text-gray-400 max-w-sm mx-auto mt-1">
+                <p className="text-sm text-gray-405 max-w-sm mx-auto mt-1">
                   {isOwnProfile
                     ? 'Select a primary category in your profile settings to enable custom orders.'
                     : `${profile.display_name} does not accept custom orders at this time.`}
@@ -415,31 +523,33 @@ export function CreatorTabs({
             )}
 
             {/* Inquiry Form */}
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full blur-2xl pointer-events-none" />
-              <h2 className="text-lg font-black text-gray-900 tracking-tight mb-2">Send an Inquiry</h2>
-              <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-                Have a quick question about custom availability, work licensing, or delivery timelines? Write directly to the creator.
-              </p>
-              {user ? (
-                <InquiryForm creatorId={profile.id} defaultInquiryType="general" />
-              ) : (
-                <div className="bg-slate-50/50 rounded-2xl p-8 text-center border border-dashed border-gray-200">
-                  <p className="text-sm font-semibold text-gray-700 mb-1">
-                    Have a project question?
-                  </p>
-                  <p className="text-xs text-gray-400 mb-5 max-w-sm mx-auto">
-                    Inquiries and messages are fully verified and safe. Authenticate now to begin talking.
-                  </p>
-                  <a
-                    href={`/login?redirected_from=/creators/${profile.slug}`}
-                    className="inline-flex items-center rounded-full bg-gray-900 px-6 py-2.5 text-xs font-black text-white hover:bg-gray-800 shadow transition duration-300 active:scale-95"
-                  >
-                    Sign in to Contact Creator
-                  </a>
-                </div>
-              )}
-            </div>
+            {!isOwnProfile && (
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md text-left">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full blur-2xl pointer-events-none" />
+                <h2 className="text-lg font-black text-gray-900 tracking-tight mb-2">Send an Inquiry</h2>
+                <p className="text-xs text-gray-550 mb-6 leading-relaxed">
+                  Have a quick question about custom availability, work licensing, or delivery timelines? Write directly to the creator.
+                </p>
+                {user ? (
+                  <InquiryForm creatorId={profile.id} defaultInquiryType="general" />
+                ) : (
+                  <div className="bg-slate-50/50 rounded-2xl p-8 text-center border border-dashed border-gray-200">
+                    <p className="text-sm font-semibold text-gray-700 mb-1">
+                      Have a project question?
+                    </p>
+                    <p className="text-xs text-gray-405 mb-5 max-w-sm mx-auto">
+                      Inquiries and messages are fully verified and safe. Authenticate now to begin talking.
+                    </p>
+                    <a
+                      href={`/login?redirected_from=/creators/${profile.slug}`}
+                      className="inline-flex items-center rounded-full bg-gray-900 px-6 py-2.5 text-xs font-black text-white hover:bg-gray-800 shadow transition duration-300 active:scale-95"
+                    >
+                      Sign in to Contact Creator
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -478,11 +588,11 @@ export function CreatorTabs({
                 <hr className="border-gray-100" />
 
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-gray-800">Review Timeline ({reviewsCount})</h3>
+                  <h3 className="text-base font-bold text-gray-800 text-left">Review Timeline ({reviewsCount})</h3>
                   <ReviewList
                     reviews={reviews}
                     viewAs="public"
-                    emptyMessage={`${profile.display_name} hasn't received any reviews yet.`}
+                    emptyMessage="No reviews yet."
                     emptyIcon="⭐"
                   />
                 </div>
@@ -492,8 +602,8 @@ export function CreatorTabs({
                 <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
                   ⭐
                 </div>
-                <h3 className="text-base font-bold text-gray-800 mb-1">No Reviews Yet</h3>
-                <p className="text-sm text-gray-400 max-w-sm mx-auto">
+                <h3 className="text-base font-bold text-gray-800 mb-1">No reviews yet.</h3>
+                <p className="text-sm text-gray-405 max-w-sm mx-auto">
                   This creator has not completed any orders with reviews yet.
                 </p>
               </div>
@@ -501,6 +611,118 @@ export function CreatorTabs({
           </div>
         )}
       </div>
+
+      {/* Lightbox Modal for Portfolio Media Assets */}
+      {activeMedia && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4 md:p-6 animate-fadeIn">
+          {/* Close button */}
+          <button
+            onClick={() => setActiveMedia(null)}
+            className="absolute top-4 right-4 text-white/85 hover:text-white bg-white/10 hover:bg-white/20 p-2.5 rounded-full transition-all z-50 border border-white/10 shadow-lg"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          {/* Lightbox Card Container */}
+          <div className="w-full max-w-4xl bg-white rounded-3xl overflow-hidden shadow-2xl border border-gray-100 flex flex-col md:flex-row max-h-[85vh] md:max-h-[80vh]">
+            {/* Left: Media Area */}
+            <div className="flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-[450px] relative">
+              {activeMedia.public_url ? (
+                activeMedia.media_type === 'video' || activeMedia.mime_type.startsWith('video/') ? (
+                  <video
+                    src={activeMedia.public_url}
+                    controls
+                    autoPlay
+                    className="max-w-full max-h-[45vh] md:max-h-[75vh] object-contain"
+                  />
+                ) : (
+                  <div className="w-full h-full min-h-[300px] md:min-h-[450px] relative">
+                    <Image
+                      src={activeMedia.public_url}
+                      alt="Portfolio asset view"
+                      fill
+                      unoptimized
+                      className="object-contain"
+                    />
+                  </div>
+                )
+              ) : (
+                <div className="w-full h-full min-h-[300px] md:min-h-[450px] flex items-center justify-center bg-gray-900 text-white/50 text-6xl">
+                  🎨
+                </div>
+              )}
+            </div>
+
+            {/* Right: Info Sidebar */}
+            <div className="w-full md:w-80 bg-white p-6 flex flex-col justify-between border-t md:border-t-0 md:border-l border-gray-100 overflow-y-auto">
+              <div className="space-y-4">
+                {/* Creator Profile Info */}
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-full bg-indigo-50 border border-indigo-100 overflow-hidden flex-shrink-0 relative">
+                    {profile.profile_image_url ? (
+                      <Image
+                        src={profile.profile_image_url}
+                        alt={profile.display_name}
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-sm font-bold text-indigo-400">
+                        {profile.display_name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <p className="text-sm font-bold text-gray-900 truncate">
+                      {profile.display_name}
+                    </p>
+                    {profile.profile_username && (
+                      <p className="text-xs text-gray-400 font-semibold">@{profile.profile_username}</p>
+                    )}
+                  </div>
+                </div>
+
+                <hr className="border-gray-100" />
+
+                <div className="space-y-1 text-left">
+                  <p className="text-xs text-gray-400 uppercase font-extrabold tracking-wider">File Details</p>
+                  <p className="text-xs text-gray-600 leading-relaxed font-semibold">
+                    Type: {activeMedia.mime_type.toUpperCase()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="space-y-4 pt-4 border-t border-gray-100 mt-6 shrink-0">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveMedia(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-150 text-gray-700 text-xs font-bold text-center transition"
+                  >
+                    Close
+                  </button>
+                  {!isOwnProfile && (
+                    <a
+                      href="#custom-order-panel"
+                      onClick={() => {
+                        setActiveMedia(null);
+                        setActiveTab('custom_order');
+                      }}
+                      className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold text-center transition shadow-sm"
+                    >
+                      Commission
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

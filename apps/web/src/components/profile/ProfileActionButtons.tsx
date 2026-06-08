@@ -25,46 +25,52 @@ export function ProfileActionButtons({
   hasCreatorCategory = false,
   initialFollowing,
 }: ProfileActionButtonsProps) {
+  // Set consistent h-10 height, rounded-xl corners, text size and layout
+  const buttonBaseClass =
+    'inline-flex items-center justify-center gap-1.5 px-4 h-10 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all duration-200 active:scale-[0.98] w-full text-center';
+
   if (isOwner) {
     return (
-      <div className="flex items-center gap-2 flex-wrap justify-center" id="owner-action-buttons">
+      <div className="grid grid-cols-2 gap-2 w-full sm:w-72 md:w-80" id="owner-action-buttons">
         <Link
           href={`/u/${username}/edit`}
           id="edit-profile-btn"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition duration-200 shadow-sm active:scale-95"
+          className={`${buttonBaseClass} bg-white border border-gray-200 text-gray-700 hover:bg-gray-50`}
         >
-          <Edit3 className="h-4 w-4" />
-          Edit Profile
+          <Edit3 className="h-4 w-4 shrink-0" />
+          <span className="truncate">Edit Profile</span>
         </Link>
 
-        {isCreator && (
+        {isCreator ? (
           <>
             <Link
               href={`/u/${username}/posts/new`}
               id="create-post-btn"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold transition duration-200 shadow-sm active:scale-95"
+              className={`${buttonBaseClass} bg-indigo-600 text-white hover:bg-indigo-700`}
             >
-              <PlusCircle className="h-4 w-4" />
-              Post Your Work
+              <PlusCircle className="h-4 w-4 shrink-0" />
+              <span className="truncate">Post Work</span>
             </Link>
             <Link
               href={`/u/${username}/posts`}
               id="manage-posts-btn"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-50 border border-indigo-100 text-sm font-bold text-indigo-700 hover:bg-indigo-100 transition duration-200 shadow-sm active:scale-95"
+              className={`${buttonBaseClass} bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-100`}
             >
-              <FileText className="h-4 w-4" />
-              Manage Posts
+              <FileText className="h-4 w-4 shrink-0" />
+              <span className="truncate">Manage Posts</span>
             </Link>
           </>
-        )}
+        ) : null}
 
         <Link
           href="/dashboard"
           id="dashboard-btn"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition duration-200 shadow-sm active:scale-95"
+          className={`${buttonBaseClass} bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 ${
+            !isCreator ? 'col-span-2' : ''
+          }`}
         >
-          <LayoutDashboard className="h-4 w-4" />
-          Dashboard
+          <LayoutDashboard className="h-4 w-4 shrink-0" />
+          <span className="truncate">Dashboard</span>
         </Link>
       </div>
     );
@@ -72,7 +78,7 @@ export function ProfileActionButtons({
 
   // Visitor view (authenticated or anonymous)
   return (
-    <div className="flex items-center gap-2 flex-wrap justify-center" id="visitor-action-buttons">
+    <div className="grid grid-cols-2 gap-2 w-full sm:w-72 md:w-80" id="visitor-action-buttons">
       {isAuthenticated ? (
         <ProfileFollowButton
           followingProfileId={profileId}
@@ -83,10 +89,10 @@ export function ProfileActionButtons({
         <Link
           href={`/login?redirected_from=/u/${username}`}
           id="follow-login-btn"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border-transparent bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white hover:opacity-90 shadow-sm shadow-indigo-100 text-sm font-semibold transition-all duration-200 active:scale-95"
+          className={`${buttonBaseClass} bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:opacity-95`}
         >
-          <LogIn className="h-4 w-4" />
-          Follow
+          <LogIn className="h-4 w-4 shrink-0" />
+          <span>Follow</span>
         </Link>
       )}
 
@@ -94,40 +100,42 @@ export function ProfileActionButtons({
         <Link
           href={`/dashboard/messages?new_chat_with_user_id=${profileId}`}
           id="message-btn"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition duration-200 shadow-sm active:scale-95"
+          className={`${buttonBaseClass} bg-white border border-gray-200 text-gray-700 hover:bg-gray-50`}
         >
-          <MessageSquare className="h-4 w-4" />
-          Message
+          <MessageSquare className="h-4 w-4 shrink-0" />
+          <span>Message</span>
         </Link>
       ) : (
         <Link
           href={`/login?redirected_from=/u/${username}`}
           id="message-login-btn"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition duration-200 shadow-sm active:scale-95"
+          className={`${buttonBaseClass} bg-white border border-gray-200 text-gray-700 hover:bg-gray-50`}
         >
-          <MessageSquare className="h-4 w-4" />
-          Message
+          <MessageSquare className="h-4 w-4 shrink-0" />
+          <span>Message</span>
         </Link>
       )}
 
       {isCreator && (
-        isAuthenticated ? (
-          <a
-            href="#custom-order-panel"
-            id="custom-order-btn"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold transition duration-200 shadow-sm active:scale-95"
-          >
-            Request Custom Order
-          </a>
-        ) : (
-          <Link
-            href={`/login?redirected_from=/u/${username}`}
-            id="custom-order-login-btn"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold transition duration-200 shadow-sm active:scale-95"
-          >
-            Request Custom Order
-          </Link>
-        )
+        <div className="col-span-2">
+          {isAuthenticated ? (
+            <a
+              href="#custom-order-panel"
+              id="custom-order-btn"
+              className={`${buttonBaseClass} bg-indigo-600 text-white hover:bg-indigo-700`}
+            >
+              Request Custom Order
+            </a>
+          ) : (
+            <Link
+              href={`/login?redirected_from=/u/${username}`}
+              id="custom-order-login-btn"
+              className={`${buttonBaseClass} bg-indigo-600 text-white hover:bg-indigo-700`}
+            >
+              Request Custom Order
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );
