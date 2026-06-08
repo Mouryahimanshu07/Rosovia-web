@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { mapProfileRowToCreatorProfile } from '../creator-profiles/creator-profile.repository';
 import type {
   ListingWithDetails,
   CreatorProfileWithCategory,
@@ -52,12 +53,14 @@ function flattenListingRow(
 function flattenCreatorRow(
   row: CreatorProfileWithCategory & {
     categories?: { name: string; slug: string } | null;
+    profiles?: { username: string | null } | null;
   }
 ): CreatorProfileWithCategory {
   return {
     ...row,
     category_name: (row.categories as { name: string; slug: string } | null)?.name ?? row.category_name ?? null,
     category_slug: (row.categories as { name: string; slug: string } | null)?.slug ?? row.category_slug ?? null,
+    profile_username: row.profiles?.username ?? row.profile_username ?? null,
   };
 }
 
@@ -326,21 +329,48 @@ export async function searchPublicCreators(
 
   // Single data query — no separate count query
   let dataQuery = supabase
-    .from('creator_profiles')
-    .select('*, categories(name, slug), profiles!inner(status, deleted_at)')
-    .is('deleted_at', null)
-    .eq('profiles.status', 'active')
-    .is('profiles.deleted_at', null);
+    .from('profiles')
+    .select(`
+      id,
+      full_name,
+      username,
+      avatar_url,
+      cover_image_url,
+      bio,
+      role,
+      city,
+      state,
+      country,
+      created_at,
+      updated_at,
+      creator_profiles (
+        id,
+        slug,
+        is_verified,
+        verification_level,
+        rating_avg,
+        rating_count,
+        total_orders,
+        total_followers,
+        headline,
+        website_url,
+        profile_theme,
+        categories ( name, slug )
+      )
+    `)
+    .eq('role', 'creator')
+    .eq('status', 'active')
+    .is('deleted_at', null);
 
   // Apply filters
   if (params.q) {
     const term = `%${params.q.trim().replace(/[%_]/g, '\\$&')}%`;
     dataQuery = dataQuery.or(
-      `display_name.ilike.${term},bio.ilike.${term},story.ilike.${term},city.ilike.${term},state.ilike.${term}`
+      `full_name.ilike.${term},username.ilike.${term},bio.ilike.${term},city.ilike.${term},state.ilike.${term}`
     );
   }
   if (params.category) {
-    dataQuery = dataQuery.eq('primary_category_id', params.category);
+    dataQuery = dataQuery.eq('creator_profiles.primary_category_id', params.category);
   }
   if (params.city) {
     dataQuery = dataQuery.ilike('city', `%${params.city.trim()}%`);
@@ -349,16 +379,16 @@ export async function searchPublicCreators(
     dataQuery = dataQuery.ilike('state', `%${params.state.trim()}%`);
   }
   if (params.verifiedOnly === true) {
-    dataQuery = dataQuery.eq('is_verified', true);
+    dataQuery = dataQuery.eq('creator_profiles.is_verified', true);
   }
 
   // Sort
   const sort = params.sort ?? 'newest';
   if (sort === 'rating_high') {
-    dataQuery = dataQuery.order('rating_avg', { ascending: false });
+    dataQuery = dataQuery.order('creator_profiles(rating_avg)', { ascending: false, nullsFirst: false });
   } else if (sort === 'verified_first') {
     dataQuery = dataQuery
-      .order('is_verified', { ascending: false })
+      .order('creator_profiles(is_verified)', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false });
   } else {
     dataQuery = dataQuery.order('created_at', { ascending: false });
@@ -374,9 +404,18 @@ export async function searchPublicCreators(
   // Trim to actual page size — extra row is only used for hasNext detection
   const pageRows = raw.slice(0, PAGE_SIZE);
 
-  const results = pageRows.map((r) =>
-    flattenCreatorRow(r as Parameters<typeof flattenCreatorRow>[0])
-  );
+  // Filter in-memory to match PostgREST joined-filter semantics
+  const filteredRows = pageRows.filter((r: any) => {
+    if (params.category && (!r.creator_profiles || r.creator_profiles.length === 0)) {
+      return false;
+    }
+    if (params.verifiedOnly && (!r.creator_profiles || r.creator_profiles.length === 0 || !r.creator_profiles[0]?.is_verified)) {
+      return false;
+    }
+    return true;
+  });
+
+  const results = filteredRows.map(mapProfileRowToCreatorProfile);
 
   return {
     data: results,
@@ -449,7 +488,7 @@ export async function getCategoryPageData(
     searchApprovedListings(supabase, { ...params, category: categoryId }),
     supabase
       .from('creator_profiles')
-      .select('*, categories(name, slug), profiles!inner(status, deleted_at)')
+      .select('*, categories(name, slug), profiles!inner(username, status, deleted_at)')
       .eq('primary_category_id', categoryId)
       .is('deleted_at', null)
       .eq('profiles.status', 'active')

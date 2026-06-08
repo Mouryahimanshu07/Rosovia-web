@@ -58,7 +58,7 @@ export async function listCreatorPublicPortfolioMedia(
     .select('*')
     .eq('owner_id', ownerId)
     .eq('is_private', false)
-    .in('status', ['uploaded', 'ready'])
+    .in('status', ['approved', 'uploaded'])
     .is('deleted_at', null)
     .is('listing_id', null)
     .order('created_at', { ascending: false });

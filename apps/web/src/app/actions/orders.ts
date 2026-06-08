@@ -127,6 +127,17 @@ export async function updateOrderMetadataAction(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: 'Not authenticated' };
 
+    // Resolve profiles.id
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (!profile) {
+      return { success: false, error: 'Profile not found' };
+    }
+
     // Fetch order
     const { data: order, error: fetchError } = await supabase
       .from('orders')
@@ -139,14 +150,14 @@ export async function updateOrderMetadataAction(
     }
 
     // Verify user is buyer or creator
-    const isBuyer = order.buyer_id === user.id;
+    const isBuyer = order.buyer_id === profile.id;
     let isCreator = false;
 
     if (!isBuyer) {
       const { data: creatorProfile } = await supabase
         .from('creator_profiles')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', profile.id)
         .single();
       if (creatorProfile && order.creator_id === creatorProfile.id) {
         isCreator = true;

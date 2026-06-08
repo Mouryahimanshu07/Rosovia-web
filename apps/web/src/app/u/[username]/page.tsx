@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { MapPin, Calendar, Users, Edit3, MessageSquare } from 'lucide-react';
+import { MapPin, Calendar } from 'lucide-react';
 
 import { createWebServerClient } from '~/lib/supabase/server';
 import {
@@ -14,9 +14,11 @@ import {
   listCreatorPublicPortfolioMedia,
   listCollectionsForPublicProfile,
   listPublicPostsForCreatorProfile,
+  getCurrentProfile,
+  ensureCreatorProfileForProfile,
 } from '@rosovia/api';
 import type { ListingWithDetails, CreatorProfileWithCategory } from '@rosovia/core';
-import { ProfileFollowButton } from '~/components/follow/profile-follow-button';
+import { ProfileActionButtons } from '~/components/profile/ProfileActionButtons';
 import { CreatorTabs } from '~/components/creator/creator-tabs';
 import { VerificationBadge } from '~/components/creator/verification-badge';
 
@@ -44,9 +46,10 @@ export default async function UserPublicProfilePage({ params }: Props) {
   const baseProfile = await getProfileByUsername(supabase, params.username);
   if (!baseProfile) notFound();
 
-  // 2. Fetch authenticated session
+  // 2. Fetch authenticated session and resolve current user's profile
   const { data: { user } } = await supabase.auth.getUser();
-  const isOwnProfile = user && user.id === baseProfile.auth_user_id;
+  const currentUserProfile = user ? await getCurrentProfile(supabase) : null;
+  const isOwnProfile = currentUserProfile !== null && currentUserProfile.id === baseProfile.id;
 
   // 3. Fetch follow status and counts
   const [followStats, initialFollowing] = await Promise.all([
@@ -55,20 +58,73 @@ export default async function UserPublicProfilePage({ params }: Props) {
   ]);
 
   // 4. Fetch creator profile check
-  const { data: rawCreatorProfile } = await supabase
-    .from('creator_profiles')
-    .select('*, categories(name, slug)')
-    .eq('user_id', baseProfile.id)
-    .is('deleted_at', null)
-    .maybeSingle();
+  const isCreator = baseProfile.role === 'creator';
+  let creatorProfile: CreatorProfileWithCategory | null = null;
 
-  const creatorProfile = rawCreatorProfile
-    ? {
+  if (isCreator) {
+    let { data: rawCreatorProfile } = await supabase
+      .from('creator_profiles')
+      .select('*, categories(name, slug)')
+      .eq('user_id', baseProfile.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (!rawCreatorProfile) {
+      try {
+        await ensureCreatorProfileForProfile(supabase, baseProfile.id);
+        const { data: rawEnsured } = await supabase
+          .from('creator_profiles')
+          .select('*, categories(name, slug)')
+          .eq('user_id', baseProfile.id)
+          .is('deleted_at', null)
+          .maybeSingle();
+        rawCreatorProfile = rawEnsured;
+      } catch (err) {
+        console.error('Failed to ensure creator profile on page load:', err);
+      }
+    }
+
+    if (rawCreatorProfile) {
+      creatorProfile = {
         ...rawCreatorProfile,
         category_name: (rawCreatorProfile.categories as any)?.name ?? null,
         category_slug: (rawCreatorProfile.categories as any)?.slug ?? null,
-      } as CreatorProfileWithCategory
-    : null;
+      } as CreatorProfileWithCategory;
+    } else {
+      // Safe fallback object for UI
+      creatorProfile = {
+        id: baseProfile.id,
+        user_id: baseProfile.id,
+        display_name: baseProfile.full_name || baseProfile.username || 'Creator',
+        slug: baseProfile.username || baseProfile.id,
+        bio: baseProfile.bio ?? null,
+        story: null,
+        primary_category_id: null,
+        skills: [],
+        languages: [],
+        city: baseProfile.city ?? null,
+        state: baseProfile.state ?? null,
+        country: baseProfile.country ?? 'India',
+        profile_image_url: baseProfile.avatar_url ?? null,
+        cover_image_url: baseProfile.cover_image_url ?? null,
+        intro_video_url: null,
+        verification_level: 'none',
+        is_verified: false,
+        rating_avg: 0,
+        rating_count: 0,
+        total_orders: 0,
+        total_followers: 0,
+        headline: null,
+        website_url: null,
+        profile_theme: 'default',
+        created_at: baseProfile.created_at,
+        updated_at: baseProfile.updated_at,
+        category_name: null,
+        category_slug: null,
+        profile_username: baseProfile.username ?? null,
+      } as any;
+    }
+  }
 
   // 5. Query creator-only tabs data in parallel if profile is creator
   let creatorTabsData = null;
@@ -201,60 +257,18 @@ export default async function UserPublicProfilePage({ params }: Props) {
             </div>
           </div>
 
-          {/* Action CTAs: Follow / Edit Profile */}
+          {/* Action CTAs: Owner vs Visitor buttons */}
           <div className="flex items-center gap-3 z-10 w-full sm:w-auto justify-center">
-            {isOwnProfile ? (
-              <div className="flex items-center gap-2 flex-wrap justify-center">
-                <Link
-                  href={`/u/${baseProfile.username}/edit`}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition duration-200 shadow-sm active:scale-95"
-                >
-                  <Edit3 className="h-4 w-4" />
-                  Edit Profile
-                </Link>
-                {creatorProfile && (
-                  <>
-                    <Link
-                      href={`/u/${baseProfile.username}/posts/new`}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold transition duration-200 shadow-sm active:scale-95"
-                    >
-                      Post Your Work
-                    </Link>
-                    <Link
-                      href={`/u/${baseProfile.username}/posts`}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-50 border border-indigo-100 text-sm font-bold text-indigo-700 hover:bg-indigo-100 transition duration-200 shadow-sm active:scale-95"
-                    >
-                      Manage Posts
-                    </Link>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 flex-wrap justify-center">
-                <ProfileFollowButton
-                  followingProfileId={baseProfile.id}
-                  username={baseProfile.username || ''}
-                  initialFollowing={initialFollowing}
-                />
-                
-                <a
-                  href={`/dashboard/messages?new_chat_with_user_id=${baseProfile.id}`}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition duration-200 shadow-sm active:scale-95"
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  Message
-                </a>
-
-                {creatorProfile?.primary_category_id && (
-                  <a
-                    href="#custom-order-panel"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold transition duration-200 shadow-sm active:scale-95"
-                  >
-                    Request Custom Order
-                  </a>
-                )}
-              </div>
-            )}
+            <ProfileActionButtons
+              isOwner={isOwnProfile}
+              isAuthenticated={!!user}
+              profileId={baseProfile.id}
+              username={baseProfile.username || ''}
+              isCreator={isCreator}
+              creatorProfileId={creatorProfile?.id ?? null}
+              hasCreatorCategory={!!creatorProfile?.primary_category_id}
+              initialFollowing={initialFollowing}
+            />
           </div>
         </div>
 

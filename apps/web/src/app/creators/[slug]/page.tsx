@@ -19,7 +19,7 @@ import { VerificationBadge } from '~/components/creator/verification-badge';
 import { RatingSummary } from '~/components/creator/rating-summary';
 import { CreatorTabs } from '~/components/creator/creator-tabs';
 import { FollowButton } from '~/components/follow/FollowButton';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, Edit3, PlusSquare, LayoutList } from 'lucide-react';
 import Link from 'next/link';
 
 interface Props {
@@ -57,15 +57,20 @@ export default async function CreatorPublicProfilePage({ params }: Props) {
     user ? isCurrentUserFollowing(supabase, profile.id) : Promise.resolve(false),
   ]);
 
-  // Is current user this creator? (prevent self-messaging)
-  const isOwnProfile = user && (await (async () => {
+  // Is current user this creator? Used to swap Follow/Message for Edit Profile
+  let isOwnProfile = false;
+  let ownerUsername: string | null = null;
+  if (user) {
     const { data: ownProfile } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, username')
       .eq('auth_user_id', user.id)
       .single();
-    return ownProfile?.id === profile.user_id;
-  })());
+    if (ownProfile?.id === profile.user_id) {
+      isOwnProfile = true;
+      ownerUsername = ownProfile.username ?? null;
+    }
+  }
 
   // Parallelize public data fetching
   const [reviews, listings, portfolioMedia, collections, workPosts] = await Promise.all([
@@ -204,42 +209,70 @@ export default async function CreatorPublicProfilePage({ params }: Props) {
           </div>
 
           {/* Quick Actions Panel */}
-          {!isOwnProfile && (
-            <div className="flex flex-wrap items-center gap-2.5 justify-center sm:justify-end mt-2 sm:mt-0 z-10">
-              <FollowButton
-                creatorProfileId={profile.id}
-                initialFollowing={initialFollowing}
-              />
-
-              {/* Message CTA */}
-              {user ? (
+          <div className="flex flex-wrap items-center gap-2.5 justify-center sm:justify-end mt-2 sm:mt-0 z-10">
+            {isOwnProfile ? (
+              /* Owner: Edit Profile + Post Your Work + Manage Posts */
+              <>
                 <Link
-                  href={`/dashboard/messages?creator=${profile.id}`}
-                  id={`message-creator-${profile.id}`}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-semibold border border-gray-200 bg-white text-gray-700 hover:border-indigo-400 hover:text-indigo-700 transition-all shadow-sm hover:shadow active:scale-95 duration-150"
+                  href={ownerUsername ? `/u/${ownerUsername}/edit` : '/dashboard/profile'}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 duration-150"
                 >
-                  <MessageCircle className="h-4 w-4 text-gray-500" />
-                  Message
+                  <Edit3 className="h-4 w-4" />
+                  Edit Profile
                 </Link>
-              ) : (
                 <Link
-                  href="/login"
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-semibold border border-gray-200 bg-white text-gray-700 hover:border-indigo-400 hover:text-indigo-700 transition-all shadow-sm active:scale-95 duration-150"
+                  href={ownerUsername ? `/u/${ownerUsername}/posts/new` : '/dashboard/creator/posts/new'}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0 duration-150"
                 >
-                  <MessageCircle className="h-4 w-4 text-gray-500" />
-                  Message
+                  <PlusSquare className="h-4 w-4" />
+                  Post Your Work
                 </Link>
-              )}
+                <Link
+                  href={ownerUsername ? `/u/${ownerUsername}/posts` : '/dashboard/creator/posts'}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-semibold border border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all shadow-sm active:scale-95 duration-150"
+                >
+                  <LayoutList className="h-4 w-4" />
+                  Manage Posts
+                </Link>
+              </>
+            ) : (
+              /* Visitor: Follow + Message + Custom Order */
+              <>
+                <FollowButton
+                  creatorProfileId={profile.id}
+                  initialFollowing={initialFollowing}
+                />
 
-              {/* Prominent Custom Order Request CTA */}
-              <Link
-                href="#custom-order-panel"
-                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0 duration-150"
-              >
-                Custom Order
-              </Link>
-            </div>
-          )}
+                {/* Message CTA */}
+                {user ? (
+                  <Link
+                    href={`/dashboard/messages?creator=${profile.id}`}
+                    id={`message-creator-${profile.id}`}
+                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-semibold border border-gray-200 bg-white text-gray-700 hover:border-indigo-400 hover:text-indigo-700 transition-all shadow-sm hover:shadow active:scale-95 duration-150"
+                  >
+                    <MessageCircle className="h-4 w-4 text-gray-500" />
+                    Message
+                  </Link>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-semibold border border-gray-200 bg-white text-gray-700 hover:border-indigo-400 hover:text-indigo-700 transition-all shadow-sm active:scale-95 duration-150"
+                  >
+                    <MessageCircle className="h-4 w-4 text-gray-500" />
+                    Message
+                  </Link>
+                )}
+
+                {/* Prominent Custom Order Request CTA */}
+                <Link
+                  href="#custom-order-panel"
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0 duration-150"
+                >
+                  Custom Order
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -303,6 +336,8 @@ export default async function CreatorPublicProfilePage({ params }: Props) {
         user={user}
         collections={collections}
         workPosts={workPosts}
+        isOwnProfile={isOwnProfile}
+        username={ownerUsername ?? undefined}
       />
     </main>
   );

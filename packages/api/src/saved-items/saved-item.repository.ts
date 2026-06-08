@@ -137,7 +137,7 @@ export async function listSavedCreators(
 ): Promise<SavedCreatorWithDetails[]> {
   const { data, error } = await supabase
     .from('saved_creators')
-    .select('*, creator_profiles:creator_profile_id ( *, categories:primary_category_id ( name, slug ) )')
+    .select('*, creator_profiles:creator_profile_id ( *, categories:primary_category_id ( name, slug ), profiles:user_id ( username ) )')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -153,6 +153,7 @@ export async function listSavedCreators(
         ...profile,
         category_name: profile.categories?.name ?? null,
         category_slug: profile.categories?.slug ?? null,
+        profile_username: profile.profiles?.username ?? null,
       } : null,
     };
   }) as SavedCreatorWithDetails[];

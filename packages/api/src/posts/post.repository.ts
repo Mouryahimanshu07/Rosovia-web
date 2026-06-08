@@ -33,7 +33,7 @@ export async function listPublicWorkFeedPosts(
         user_id,
         deleted_at,
         primary_category_id,
-        profiles!inner ( status, deleted_at )
+        profiles!inner ( username, status, deleted_at )
       ),
       creator_post_media (
         id,
@@ -122,7 +122,8 @@ export async function listPostsForCreatorProfile(
     .select(`
       *,
       creator_profiles!inner (
-        id, display_name, slug, profile_image_url, is_verified, verification_level, user_id, deleted_at
+        id, display_name, slug, profile_image_url, is_verified, verification_level, user_id, deleted_at,
+        profiles!inner ( username, status, deleted_at )
       ),
       creator_post_media (
         id, post_id, media_asset_id, sort_order,
@@ -210,7 +211,8 @@ export async function listPublicPostsForCreatorProfile(
     .select(`
       *,
       creator_profiles!inner (
-        id, display_name, slug, profile_image_url, is_verified, verification_level, user_id
+        id, display_name, slug, profile_image_url, is_verified, verification_level, user_id,
+        profiles!inner ( username, status, deleted_at )
       ),
       creator_post_media (
         id, post_id, media_asset_id, sort_order,
@@ -381,6 +383,7 @@ function mapRowToPost(row: any): CreatorPostWithDetails {
     deleted_at: row.deleted_at,
     creator_display_name: cp?.display_name ?? null,
     creator_slug: cp?.slug ?? null,
+    creator_profile_username: cp?.profiles?.username ?? null,
     creator_profile_image_url: cp?.profile_image_url ?? null,
     creator_is_verified: cp?.is_verified ?? false,
     creator_verification_level: cp?.verification_level ?? 'none',

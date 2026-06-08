@@ -51,14 +51,12 @@ export async function AppHeader() {
                 )}
               </Link>
 
-              {profile.username && (
-                <Link
-                  href={`/u/${profile.username}`}
-                  className="text-gray-600 hover:text-gray-950"
-                >
-                  Profile
-                </Link>
-              )}
+              <Link
+                href={profile.username ? `/u/${profile.username}` : '/dashboard/profile'}
+                className="text-gray-600 hover:text-gray-950"
+              >
+                Profile
+              </Link>
 
               <Link
                 href="/dashboard"

@@ -72,6 +72,7 @@ export async function updateProfileAction(
     }
 
     revalidatePath('/dashboard/profile');
+    revalidatePath('/explore');
     if (input.username) {
       revalidatePath(`/u/${input.username}`);
       revalidatePath(`/u/${input.username}/edit`);

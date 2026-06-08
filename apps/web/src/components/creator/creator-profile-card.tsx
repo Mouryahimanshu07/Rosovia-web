@@ -10,10 +10,13 @@ interface CreatorProfileCardProps {
 
 export function CreatorProfileCard({ profile }: CreatorProfileCardProps) {
   const location = [profile.city, profile.state].filter(Boolean).join(', ');
+  const profileUrl = profile.profile_username
+    ? `/u/${profile.profile_username}`
+    : `/creators/${profile.slug}`;
 
   return (
     <Link
-      href={`/creators/${profile.slug}`}
+      href={profileUrl}
       className="group block rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-gray-300"
     >
       {/* Avatar */}
@@ -37,8 +40,10 @@ export function CreatorProfileCard({ profile }: CreatorProfileCardProps) {
           <p className="font-semibold text-gray-900 truncate group-hover:text-indigo-700 transition-colors">
             {profile.display_name}
           </p>
-          {profile.category_name && (
+          {profile.category_name ? (
             <p className="text-xs text-gray-500 truncate">{profile.category_name}</p>
+          ) : (
+            <p className="text-xs text-indigo-600 font-semibold truncate capitalize">{(profile as any).role || 'Member'}</p>
           )}
         </div>
       </div>

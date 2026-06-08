@@ -47,6 +47,7 @@ export interface CreatorPostMediaWithUrl extends CreatorPostMedia {
 export interface CreatorPostWithDetails extends CreatorPost {
   creator_display_name: string | null;
   creator_slug: string | null;
+  creator_profile_username: string | null;
   creator_profile_image_url: string | null;
   creator_is_verified: boolean;
   creator_verification_level: string;

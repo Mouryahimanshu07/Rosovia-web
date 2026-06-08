@@ -91,10 +91,20 @@ export async function generateCustomOfferAction(
       return { success: false, error: 'Not authenticated' };
     }
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (!profile) {
+      return { success: false, error: 'Profile not found' };
+    }
+
     const { data: creatorProfile } = await supabase
       .from('creator_profiles')
       .select('id, display_name')
-      .eq('user_id', user.id)
+      .eq('user_id', profile.id)
       .single();
 
     if (!creatorProfile) {

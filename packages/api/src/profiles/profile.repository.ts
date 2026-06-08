@@ -87,10 +87,9 @@ export async function getProfileByUsername(
   username: string
 ): Promise<Profile | null> {
   const { data, error } = await supabase
-    .from('profiles')
+    .from('public_profiles')
     .select('*')
     .eq('username', username)
-    .is('deleted_at', null)
     .maybeSingle();
 
   if (error) throw new Error(`Failed to fetch profile by username: ${error.message}`);

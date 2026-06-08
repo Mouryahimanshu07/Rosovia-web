@@ -136,11 +136,9 @@ export function CreatorTabs({
             )}
           </button>
 
-          {profile.primary_category_id && (
-            <button onClick={() => setActiveTab('custom_order')} className={tabClass('custom_order')}>
-              <span>Custom Order</span>
-            </button>
-          )}
+          <button onClick={() => setActiveTab('custom_order')} className={tabClass('custom_order')}>
+            <span>Custom Order</span>
+          </button>
 
           <button onClick={() => setActiveTab('reviews')} className={tabClass('reviews')}>
             <span>Reviews</span>
@@ -219,10 +217,24 @@ export function CreatorTabs({
                   <div className="w-16 h-16 rounded-full bg-pink-50 text-pink-600 flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
                     🎨
                   </div>
-                  <h3 className="text-base font-bold text-gray-800 mb-1">No Portfolio Showcase</h3>
-                  <p className="text-sm text-gray-400 max-w-sm mx-auto">
-                    {profile.display_name} has not uploaded any portfolio artwork, case studies, or design media yet.
+                  <h3 className="text-base font-bold text-gray-800 mb-1">
+                    {isOwnProfile ? 'Add your first portfolio item' : 'No portfolio items yet'}
+                  </h3>
+                  <p className="text-sm text-gray-400 max-w-sm mx-auto mt-1">
+                    {isOwnProfile
+                      ? 'Create a listing or upload media to showcase your work collections to visitors.'
+                      : `${profile.display_name} hasn't uploaded any portfolio collections or media assets yet.`}
                   </p>
+                  {isOwnProfile && (
+                    <div className="mt-4 flex gap-3 justify-center">
+                      <a
+                        href="/dashboard/creator/listings/new"
+                        className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm"
+                      >
+                        Create Listing
+                      </a>
+                    </div>
+                  )}
                 </div>
               )
             )}
@@ -243,10 +255,12 @@ export function CreatorTabs({
                 <div className="w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4 text-xl font-bold">
                   📷
                 </div>
-                <h3 className="text-base font-bold text-gray-800 mb-1">No Posts Yet</h3>
+                <h3 className="text-base font-bold text-gray-800 mb-1">
+                  {isOwnProfile ? 'Create your first work post' : 'No posts yet'}
+                </h3>
                 <p className="text-sm text-gray-400 max-w-sm mx-auto mb-4">
                   {isOwnProfile
-                    ? "You haven't shared any work posts on your profile yet."
+                    ? "Share behind-the-scenes, updates, or recent works with your followers."
                     : `${profile.display_name} hasn't shared any work posts yet.`}
                 </p>
                 {isOwnProfile && (
@@ -276,10 +290,22 @@ export function CreatorTabs({
                 <div className="w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
                   🛠️
                 </div>
-                <h3 className="text-base font-bold text-gray-800 mb-1">No Services Offered</h3>
-                <p className="text-sm text-gray-400 max-w-sm mx-auto">
-                  {profile.display_name} has not listed any services, mentorships, or workshops yet.
+                <h3 className="text-base font-bold text-gray-800 mb-1">
+                  {isOwnProfile ? 'Add your first service' : 'No services available yet'}
+                </h3>
+                <p className="text-sm text-gray-400 max-w-sm mx-auto mt-1">
+                  {isOwnProfile
+                    ? 'Offer mentorships, consulting, customized services, or workshops.'
+                    : `${profile.display_name} has not listed any services yet.`}
                 </p>
+                {isOwnProfile && (
+                  <a
+                    href="/dashboard/creator/listings/new"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm"
+                  >
+                    Add Service
+                  </a>
+                )}
               </div>
             )}
           </div>
@@ -299,10 +325,22 @@ export function CreatorTabs({
                 <div className="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
                   🛍️
                 </div>
-                <h3 className="text-base font-bold text-gray-800 mb-1">Shop is Empty</h3>
-                <p className="text-sm text-gray-400 max-w-sm mx-auto">
-                  {profile.display_name} has not listed any shop items or digital products yet.
+                <h3 className="text-base font-bold text-gray-800 mb-1">
+                  {isOwnProfile ? 'Add your first product' : 'No products available yet'}
+                </h3>
+                <p className="text-sm text-gray-400 max-w-sm mx-auto mt-1">
+                  {isOwnProfile
+                    ? 'Sell digital assets, physical artwork, or downloadable resources.'
+                    : `${profile.display_name} has not listed any products yet.`}
                 </p>
+                {isOwnProfile && (
+                  <a
+                    href="/dashboard/creator/listings/new"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm"
+                  >
+                    Add Product
+                  </a>
+                )}
               </div>
             )}
           </div>
@@ -311,7 +349,7 @@ export function CreatorTabs({
         {/* CUSTOM ORDER PANEL */}
         {activeTab === 'custom_order' && (
           <div className="space-y-8 animate-fadeIn">
-            {profile.primary_category_id && (
+            {profile.primary_category_id ? (
               <div
                 id="custom-order-panel"
                 className="bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden transition-all duration-300 scroll-mt-6 hover:shadow-xl hover:shadow-indigo-100"
@@ -350,6 +388,28 @@ export function CreatorTabs({
                       Sign in to Request Order
                     </a>
                   </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-16 bg-white rounded-xl border border-gray-100 shadow-sm">
+                <div className="w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
+                  ⚡
+                </div>
+                <h3 className="text-base font-bold text-gray-800 mb-1">
+                  {isOwnProfile ? 'Enable Custom Orders' : 'No custom orders available yet'}
+                </h3>
+                <p className="text-sm text-gray-400 max-w-sm mx-auto mt-1">
+                  {isOwnProfile
+                    ? 'Select a primary category in your profile settings to enable custom orders.'
+                    : `${profile.display_name} does not accept custom orders at this time.`}
+                </p>
+                {isOwnProfile && (
+                  <a
+                    href={`/u/${username || profile.slug}/edit`}
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm"
+                  >
+                    Select Category
+                  </a>
                 )}
               </div>
             )}

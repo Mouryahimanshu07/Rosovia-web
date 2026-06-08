@@ -32,6 +32,11 @@ export function CreatorPostCard({
   const isVideo = firstMedia?.media_type === 'video';
   const hasMultiple = post.media.length > 1;
   const relativeTime = timeAgo(post.created_at);
+  const creatorProfileUrl = post.creator_profile_username
+    ? `/u/${post.creator_profile_username}`
+    : post.creator_slug
+      ? `/creators/${post.creator_slug}`
+      : '#';
 
   return (
     <article className="group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg hover:border-indigo-100 transition-all duration-300 flex flex-col">
@@ -114,9 +119,9 @@ export function CreatorPostCard({
       {/* Content */}
       <div className="p-4 flex flex-col gap-3 flex-1">
         {/* Creator row */}
-        {showCreator && post.creator_slug && (
+        {showCreator && (post.creator_slug || post.creator_profile_username) && (
           <Link
-            href={`/creators/${post.creator_slug}`}
+            href={creatorProfileUrl}
             className="flex items-center gap-2 group/creator"
           >
             <div className="h-7 w-7 rounded-full bg-indigo-50 border border-indigo-100 overflow-hidden flex-shrink-0">
@@ -235,7 +240,7 @@ export function CreatorPostCard({
               <span>Ask</span>
             </Link>
             <Link
-              href={`/creators/${post.creator_slug}#custom-order-panel`}
+              href={`${creatorProfileUrl}#custom-order-panel`}
               className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 transition-colors ml-3 font-medium"
               title="Commission a Custom Order"
             >

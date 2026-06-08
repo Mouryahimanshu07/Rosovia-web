@@ -29,5 +29,6 @@ export interface SavedCreatorWithDetails extends SavedCreator {
   creator_profiles: CreatorProfile & {
     category_name: string | null;
     category_slug: string | null;
+    profile_username: string | null;
   };
 }

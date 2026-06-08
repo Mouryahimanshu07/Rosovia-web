@@ -41,6 +41,12 @@ async function resolveActiveProfile(supabase: SupabaseClient) {
   return profile;
 }
 
+export interface FollowResponse {
+  success: boolean;
+  isFollowing: boolean;
+  followerCount?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Follow a creator profile
 // ---------------------------------------------------------------------------
@@ -48,7 +54,7 @@ async function resolveActiveProfile(supabase: SupabaseClient) {
 export async function followCreator(
   supabase: SupabaseClient,
   rawInput: { creatorProfileId: string }
-): Promise<CreatorFollow> {
+): Promise<FollowResponse> {
   const input = followCreatorSchema.parse(rawInput);
   const profile = await resolveActiveProfile(supabase);
 
@@ -74,28 +80,36 @@ export async function followCreator(
   // Check for duplicate follow
   const existing = await getFollowRow(supabase, profile.id, input.creatorProfileId);
   if (existing) {
-    throw new Error('You are already following this creator');
+    const followerCount = await getFollowerCount(supabase, input.creatorProfileId);
+    return { success: true, isFollowing: true, followerCount };
   }
 
   // TODO: Rate-limit hook — max X follow actions per minute per user
 
-  const follow = await insertFollow(supabase, profile.id, input.creatorProfileId);
-
-  // Notify creator
   try {
-    await createSystemNotification(supabase, {
-      recipientProfileId: cp.user_id,
-      type: 'new_follower',
-      title: 'New Follower',
-      body: 'Someone started following your profile.',
-      entityType: 'follow',
-      entityId: follow.id,
-    });
-  } catch (e) {
-    console.error('Failed to notify creator of new follower:', e);
+    const follow = await insertFollow(supabase, profile.id, input.creatorProfileId);
+
+    // Notify creator
+    try {
+      await createSystemNotification(supabase, {
+        recipientProfileId: cp.user_id,
+        type: 'new_follower',
+        title: 'New Follower',
+        body: 'Someone started following your profile.',
+        entityType: 'follow',
+        entityId: follow.id,
+      });
+    } catch (e) {
+      console.error('Failed to notify creator of new follower:', e);
+    }
+  } catch (err: any) {
+    if (!err.message?.includes('23505')) {
+      throw err;
+    }
   }
 
-  return follow;
+  const followerCount = await getFollowerCount(supabase, input.creatorProfileId);
+  return { success: true, isFollowing: true, followerCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -105,13 +119,20 @@ export async function followCreator(
 export async function unfollowCreator(
   supabase: SupabaseClient,
   rawInput: { creatorProfileId: string }
-): Promise<void> {
+): Promise<FollowResponse> {
   const input = unfollowCreatorSchema.parse(rawInput);
   const profile = await resolveActiveProfile(supabase);
 
-  // TODO: Rate-limit hook — prevent follow/unfollow abuse
+  // Check if follow row exists
+  const existing = await getFollowRow(supabase, profile.id, input.creatorProfileId);
+  if (!existing) {
+    const followerCount = await getFollowerCount(supabase, input.creatorProfileId);
+    return { success: true, isFollowing: false, followerCount };
+  }
 
   await deleteFollow(supabase, profile.id, input.creatorProfileId);
+  const followerCount = await getFollowerCount(supabase, input.creatorProfileId);
+  return { success: true, isFollowing: false, followerCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +159,7 @@ export async function isCurrentUserFollowing(
 export async function followProfile(
   supabase: SupabaseClient,
   rawInput: { followingProfileId: string }
-): Promise<ProfileFollow> {
+): Promise<FollowResponse> {
   const input = followProfileSchema.parse(rawInput);
   const profile = await resolveActiveProfile(supabase);
 
@@ -166,26 +187,34 @@ export async function followProfile(
   // Check for duplicate follow
   const existing = await getProfileFollowRow(supabase, profile.id, input.followingProfileId);
   if (existing) {
-    throw new Error('You are already following this user');
+    const stats = await getProfileFollowStats(supabase, input.followingProfileId);
+    return { success: true, isFollowing: true, followerCount: stats.followersCount };
   }
 
-  const follow = await insertProfileFollow(supabase, profile.id, input.followingProfileId);
-
-  // Notify target user
   try {
-    await createSystemNotification(supabase, {
-      recipientProfileId: input.followingProfileId,
-      type: 'new_follower',
-      title: 'New Follower',
-      body: `${profile.full_name || profile.username || 'Someone'} started following your profile.`,
-      entityType: 'follow',
-      entityId: follow.id,
-    });
-  } catch (e) {
-    console.error('Failed to notify profile of new follower:', e);
+    const follow = await insertProfileFollow(supabase, profile.id, input.followingProfileId);
+
+    // Notify target user
+    try {
+      await createSystemNotification(supabase, {
+        recipientProfileId: input.followingProfileId,
+        type: 'new_follower',
+        title: 'New Follower',
+        body: `${profile.full_name || profile.username || 'Someone'} started following your profile.`,
+        entityType: 'follow',
+        entityId: follow.id,
+      });
+    } catch (e) {
+      console.error('Failed to notify profile of new follower:', e);
+    }
+  } catch (err: any) {
+    if (!err.message?.includes('23505')) {
+      throw err;
+    }
   }
 
-  return follow;
+  const stats = await getProfileFollowStats(supabase, input.followingProfileId);
+  return { success: true, isFollowing: true, followerCount: stats.followersCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -195,11 +224,20 @@ export async function followProfile(
 export async function unfollowProfile(
   supabase: SupabaseClient,
   rawInput: { followingProfileId: string }
-): Promise<void> {
+): Promise<FollowResponse> {
   const input = unfollowProfileSchema.parse(rawInput);
   const profile = await resolveActiveProfile(supabase);
 
+  // Check if follow row exists
+  const existing = await getProfileFollowRow(supabase, profile.id, input.followingProfileId);
+  if (!existing) {
+    const stats = await getProfileFollowStats(supabase, input.followingProfileId);
+    return { success: true, isFollowing: false, followerCount: stats.followersCount };
+  }
+
   await deleteProfileFollow(supabase, profile.id, input.followingProfileId);
+  const stats = await getProfileFollowStats(supabase, input.followingProfileId);
+  return { success: true, isFollowing: false, followerCount: stats.followersCount };
 }
 
 // ---------------------------------------------------------------------------

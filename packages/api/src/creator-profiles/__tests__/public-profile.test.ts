@@ -91,7 +91,7 @@ describe('Public Creator Profile Queries', () => {
       expect(mockSupabase.from).toHaveBeenCalledWith('media_assets');
       expect(mockSupabase.eq).toHaveBeenCalledWith('owner_id', 'profile_123');
       expect(mockSupabase.eq).toHaveBeenCalledWith('is_private', false);
-      expect(mockSupabase.in).toHaveBeenCalledWith('status', ['uploaded', 'ready']);
+      expect(mockSupabase.in).toHaveBeenCalledWith('status', ['approved', 'uploaded']);
       expect(mockSupabase.is).toHaveBeenCalledWith('deleted_at', null);
       expect(mockSupabase.is).toHaveBeenCalledWith('listing_id', null);
 

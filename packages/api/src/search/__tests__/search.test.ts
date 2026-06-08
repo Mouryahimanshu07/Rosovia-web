@@ -24,6 +24,7 @@ vi.mock('../../listings/listing.repository', () => ({
 
 vi.mock('../../creator-profiles/creator-profile.repository', () => ({
   listPublicCreatorProfiles: vi.fn(),
+  mapProfileRowToCreatorProfile: (row: any) => row,
 }));
 
 const CATEGORY_ID = 'e3d7bb0d-bbfb-48bb-a084-3c66f578df9e';
@@ -172,7 +173,7 @@ describe('Search & Discovery Service & Repository', () => {
     it('lists public creators with status active', async () => {
       await searchPublicCreators(mockSupabase as SupabaseClient, {});
 
-      expect(mockSupabase.from).toHaveBeenCalledWith('creator_profiles');
+      expect(mockSupabase.from).toHaveBeenCalledWith('profiles');
       expect(mockIs).toHaveBeenCalledWith('deleted_at', null);
     });
 
@@ -181,7 +182,7 @@ describe('Search & Discovery Service & Repository', () => {
         sort: 'verified_first',
       });
 
-      expect(mockOrder).toHaveBeenCalledWith('is_verified', { ascending: false });
+      expect(mockOrder).toHaveBeenCalledWith('creator_profiles(is_verified)', { ascending: false, nullsFirst: false });
     });
   });
 

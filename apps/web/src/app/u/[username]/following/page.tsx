@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
 import { createWebServerClient } from '~/lib/supabase/server';
-import { getProfileByUsername, listProfileFollowing, isCurrentUserFollowingProfile } from '@rosovia/api';
+import { getProfileByUsername, listProfileFollowing, isCurrentUserFollowingProfile, getCurrentProfile } from '@rosovia/api';
 import { ProfileFollowButton } from '~/components/follow/profile-follow-button';
 
 export const dynamic = 'force-dynamic';
@@ -20,8 +20,9 @@ export default async function FollowingListPage({ params }: Props) {
   const baseProfile = await getProfileByUsername(supabase, params.username);
   if (!baseProfile) notFound();
 
-  // 2. Fetch authenticated session
+  // 2. Fetch authenticated session and resolve current user profile
   const { data: { user } } = await supabase.auth.getUser();
+  const currentUserProfile = user ? await getCurrentProfile(supabase) : null;
 
   // 3. List following
   const following = await listProfileFollowing(supabase, baseProfile.id);
@@ -33,7 +34,7 @@ export default async function FollowingListPage({ params }: Props) {
       return {
         ...f,
         isFollowing,
-        isSelf: user && user.id === f.auth_user_id,
+        isSelf: currentUserProfile !== null && currentUserProfile.id === f.id,
       };
     })
   );

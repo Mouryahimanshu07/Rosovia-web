@@ -39,4 +39,5 @@ export interface CreatorProfile {
 export interface CreatorProfileWithCategory extends CreatorProfile {
   category_name: string | null;
   category_slug: string | null;
+  profile_username: string | null;
 }

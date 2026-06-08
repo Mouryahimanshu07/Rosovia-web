@@ -139,3 +139,47 @@ export async function getPublicCreatorProfileBySlug(
 ): Promise<CreatorProfileWithCategory | null> {
   return getCreatorProfileBySlug(supabase, slug);
 }
+
+/**
+ * Ensures a creator profile row exists for the given profile ID (profiles.id).
+ * Idempotent: safe to call on every profile fetch or update.
+ */
+export async function ensureCreatorProfileForProfile(
+  supabase: SupabaseClient,
+  profileId: string
+): Promise<CreatorProfile> {
+  const existing = await getCreatorProfileByUserId(supabase, profileId);
+  if (existing) return existing;
+
+  // Retrieve base profile to get defaults
+  const { data: profile, error: profileErr } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', profileId)
+    .single();
+
+  if (profileErr || !profile) {
+    throw new Error(`Profile not found for ID: ${profileId}`);
+  }
+
+  if (profile.role !== 'creator') {
+    throw new Error(`Profile role is not creator for ID: ${profileId}`);
+  }
+
+  const slug = await buildUniqueSlug(supabase, profile.full_name || profile.username || 'creator');
+
+  return createCreatorProfile(supabase, {
+    user_id: profileId,
+    display_name: profile.full_name || profile.username || 'Creator',
+    slug,
+    bio: profile.bio ?? null,
+    city: profile.city ?? null,
+    state: profile.state ?? null,
+    country: profile.country ?? 'India',
+    profile_image_url: profile.avatar_url ?? null,
+    cover_image_url: profile.cover_image_url ?? null,
+    skills: [],
+    languages: [],
+  });
+}
+
