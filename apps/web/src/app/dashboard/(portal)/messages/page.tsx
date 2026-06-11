@@ -25,6 +25,7 @@ interface MessagesPageProps {
     id?: string;
     role?: 'buyer' | 'creator';
     creator?: string;
+    user?: string;
   };
 }
 
@@ -34,6 +35,81 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
 
   if (!profile) redirect('/login');
   if (profile.status !== 'active') redirect('/login?error=account_suspended');
+
+  // Handle message user entry point (preferred route contract)
+  if (searchParams.user) {
+    try {
+      if (searchParams.user === profile.id) {
+        redirect('/dashboard/messages?error=cannot_message_self');
+      }
+
+      // Check target profile
+      const { data: targetProfile, error: targetError } = await supabase
+        .from('profiles')
+        .select('id, status, role')
+        .eq('id', searchParams.user)
+        .is('deleted_at', null)
+        .single();
+
+      if (!targetError && targetProfile && targetProfile.status === 'active') {
+        let buyerId: string | null = null;
+        let creatorId: string | null = null;
+
+        if (targetProfile.role === 'creator') {
+          const { data: targetCreator } = await supabase
+            .from('creator_profiles')
+            .select('id')
+            .eq('user_id', targetProfile.id)
+            .is('deleted_at', null)
+            .single();
+
+          if (targetCreator) {
+            buyerId = profile.id;
+            creatorId = targetCreator.id;
+          }
+        } else if (profile.role === 'creator') {
+          const { data: myCreator } = await supabase
+            .from('creator_profiles')
+            .select('id')
+            .eq('user_id', profile.id)
+            .is('deleted_at', null)
+            .single();
+
+          if (myCreator) {
+            buyerId = targetProfile.id;
+            creatorId = myCreator.id;
+          }
+        }
+
+        if (buyerId && creatorId) {
+          // Check if conversation exists
+          const { data: existing } = await supabase
+            .from('conversations')
+            .select('id')
+            .eq('buyer_id', buyerId)
+            .eq('creator_id', creatorId)
+            .is('deleted_at', null)
+            .maybeSingle();
+
+          if (existing) {
+            redirect(`/dashboard/messages?id=${existing.id}${searchParams.role ? `&role=${searchParams.role}` : ''}`);
+          } else {
+            const { data: newConvo, error: createError } = await supabase
+              .from('conversations')
+              .insert({ buyer_id: buyerId, creator_id: creatorId })
+              .select('id')
+              .single();
+
+            if (!createError && newConvo) {
+              redirect(`/dashboard/messages?id=${newConvo.id}${searchParams.role ? `&role=${searchParams.role}` : ''}`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to get/create conversation for user entry point:', err);
+    }
+  }
 
   // Handle message creator entry point
   if (searchParams.creator) {
@@ -119,7 +195,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
               </h2>
             </div>
 
-            <div className="flex-1 overflow-y-auto divide-y divide-gray-150">
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-200">
               {conversations.length === 0 ? (
                 <div className="flex h-48 flex-col items-center justify-center p-6 text-center text-gray-500">
                   <span className="text-2xl mb-1">💬</span>
@@ -227,7 +303,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
                 </div>
 
                 {/* Email Masking notice */}
-                <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 text-xs text-blue-850 flex items-center gap-2 font-medium">
+                <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 text-xs text-blue-800 flex items-center gap-2 font-medium">
                   <span>📨</span>
                   <span>
                     Email Masking Relay Active: To minimize platform database overhead, your messages are automatically mirrored to the counterparty&apos;s verified email inbox. You can also reply directly from your standard email client.
@@ -282,7 +358,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
                                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
                                   isMe
                                     ? 'bg-indigo-900/60 border-indigo-700 text-indigo-200'
-                                    : 'bg-indigo-50 border-indigo-150 text-indigo-750'
+                                    : 'bg-indigo-50 border-indigo-200 text-indigo-700'
                                 }`}>
                                   Pending
                                 </span>

@@ -105,8 +105,8 @@ describe('Follow Service Layer', () => {
 
   describe('followCreator', () => {
     it('succeeds and follows creator when not already following', async () => {
-      vi.mocked(getFollowRow).mockResolvedValue(null);
-      vi.mocked(insertFollow).mockResolvedValue({ id: 'follow-123' } as any);
+      vi.mocked(getProfileFollowRow).mockResolvedValue(null);
+      vi.mocked(insertProfileFollow).mockResolvedValue({ id: 'follow-123' } as any);
 
       const result = await followCreator(mockSupabase as SupabaseClient, {
         creatorProfileId: TARGET_CREATOR_PROFILE_ID,
@@ -115,13 +115,13 @@ describe('Follow Service Layer', () => {
       expect(result).toEqual({
         success: true,
         isFollowing: true,
-        followerCount: 10,
+        followerCount: 5,
       });
-      expect(insertFollow).toHaveBeenCalledWith(mockSupabase, SENDER_PROFILE_ID, TARGET_CREATOR_PROFILE_ID);
+      expect(insertProfileFollow).toHaveBeenCalledWith(mockSupabase, SENDER_PROFILE_ID, TARGET_CREATOR_USER_PROFILE_ID);
     });
 
     it('returns success and does not insert if already following (idempotency)', async () => {
-      vi.mocked(getFollowRow).mockResolvedValue({ id: 'follow-123' } as any);
+      vi.mocked(getProfileFollowRow).mockResolvedValue({ id: 'follow-123' } as any);
 
       const result = await followCreator(mockSupabase as SupabaseClient, {
         creatorProfileId: TARGET_CREATOR_PROFILE_ID,
@@ -130,9 +130,9 @@ describe('Follow Service Layer', () => {
       expect(result).toEqual({
         success: true,
         isFollowing: true,
-        followerCount: 10,
+        followerCount: 5,
       });
-      expect(insertFollow).not.toHaveBeenCalled();
+      expect(insertProfileFollow).not.toHaveBeenCalled();
     });
 
     it('blocks self-following', async () => {
@@ -165,8 +165,8 @@ describe('Follow Service Layer', () => {
 
   describe('unfollowCreator', () => {
     it('succeeds and unfollows creator when currently following', async () => {
-      vi.mocked(getFollowRow).mockResolvedValue({ id: 'follow-123' } as any);
-      vi.mocked(getFollowerCount).mockResolvedValue(9);
+      vi.mocked(getProfileFollowRow).mockResolvedValue({ id: 'follow-123' } as any);
+      vi.mocked(getProfileFollowerCount).mockResolvedValue(4);
 
       const result = await unfollowCreator(mockSupabase as SupabaseClient, {
         creatorProfileId: TARGET_CREATOR_PROFILE_ID,
@@ -175,13 +175,13 @@ describe('Follow Service Layer', () => {
       expect(result).toEqual({
         success: true,
         isFollowing: false,
-        followerCount: 9,
+        followerCount: 4,
       });
-      expect(deleteFollow).toHaveBeenCalledWith(mockSupabase, SENDER_PROFILE_ID, TARGET_CREATOR_PROFILE_ID);
+      expect(deleteProfileFollow).toHaveBeenCalledWith(mockSupabase, SENDER_PROFILE_ID, TARGET_CREATOR_USER_PROFILE_ID);
     });
 
     it('returns success and does not delete if not following (idempotency)', async () => {
-      vi.mocked(getFollowRow).mockResolvedValue(null);
+      vi.mocked(getProfileFollowRow).mockResolvedValue(null);
 
       const result = await unfollowCreator(mockSupabase as SupabaseClient, {
         creatorProfileId: TARGET_CREATOR_PROFILE_ID,
@@ -190,9 +190,9 @@ describe('Follow Service Layer', () => {
       expect(result).toEqual({
         success: true,
         isFollowing: false,
-        followerCount: 10,
+        followerCount: 5,
       });
-      expect(deleteFollow).not.toHaveBeenCalled();
+      expect(deleteProfileFollow).not.toHaveBeenCalled();
     });
   });
 

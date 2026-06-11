@@ -218,7 +218,7 @@ export function CreatorPostCard({
                       {post.listing.currency} {post.listing.price.toLocaleString('en-IN')}
                     </span>
                   ) : (
-                    <span className="text-xs italic text-gray-505 bg-white border border-gray-100 rounded-lg px-2.5 py-1 inline-block shadow-sm">
+                    <span className="text-xs italic text-gray-500 bg-white border border-gray-100 rounded-lg px-2.5 py-1 inline-block shadow-sm">
                       Price on Request
                     </span>
                   )}
@@ -231,7 +231,7 @@ export function CreatorPostCard({
           {isOwnDashboard && (post.moderation_status === 'rejected' || post.moderation_status === 'hidden') && (
             <div className="mt-2 space-y-1.5 rounded-xl text-xs">
               {post.moderation_status === 'rejected' && (
-                <div className="text-red-850 border border-red-100 bg-red-50/50 p-2.5 rounded-xl space-y-2">
+                <div className="text-red-800 border border-red-100 bg-red-50/50 p-2.5 rounded-xl space-y-2">
                   <span className="font-bold text-red-800 flex items-center gap-1">❌ Rejected</span>
                   {post.moderation_note && (
                     <div className="bg-white/95 p-2 rounded-lg border border-red-100 text-[10px] text-red-700 leading-relaxed font-mono">
@@ -245,10 +245,10 @@ export function CreatorPostCard({
                 </div>
               )}
               {post.moderation_status === 'hidden' && (
-                <div className="text-gray-850 border border-gray-200 bg-gray-50 p-2.5 rounded-xl space-y-2">
+                <div className="text-gray-800 border border-gray-200 bg-gray-50 p-2.5 rounded-xl space-y-2">
                   <span className="font-bold text-gray-800 flex items-center gap-1">👁️ Hidden</span>
                   {post.moderation_note && (
-                    <div className="bg-white/95 p-2 rounded-lg border border-gray-150 text-[10px] text-gray-750 leading-relaxed font-mono">
+                    <div className="bg-white/95 p-2 rounded-lg border border-gray-200 text-[10px] text-gray-750 leading-relaxed font-mono">
                       <span className="font-bold text-gray-500 block uppercase tracking-wider text-[9px] mb-0.5">Admin Note:</span>
                       {post.moderation_note}
                     </div>
@@ -276,7 +276,7 @@ export function CreatorPostCard({
                 type="button"
                 onClick={handleDeleteClick}
                 disabled={isDeleting}
-                className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-red-55/10 hover:bg-red-50 border border-red-100 text-xs font-bold text-red-700 transition active:scale-95 disabled:opacity-50"
+                className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-red-500/10 hover:bg-red-50 border border-red-100 text-xs font-bold text-red-700 transition active:scale-95 disabled:opacity-50"
               >
                 {isDeleting ? (
                   <>
@@ -420,7 +420,7 @@ export function CreatorPostCard({
                   <button
                     type="button"
                     onClick={() => setIsLightboxOpen(false)}
-                    className="flex-1 py-2 rounded-xl bg-gray-150 hover:bg-gray-205 text-gray-700 text-xs font-bold text-center transition"
+                    className="flex-1 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold text-center transition"
                   >
                     Close
                   </button>

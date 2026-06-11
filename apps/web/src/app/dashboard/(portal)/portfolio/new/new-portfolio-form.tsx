@@ -97,7 +97,7 @@ export function NewPortfolioForm() {
           </label>
 
           {!uploadedMedia ? (
-            <div className="border-2 border-dashed border-gray-250 rounded-2xl p-6 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 hover:border-indigo-300 transition-all duration-200">
+            <div className="border-2 border-dashed border-gray-200 rounded-2xl p-6 flex flex-col items-center justify-center bg-gray-50/50 hover:bg-gray-50 hover:border-indigo-300 transition-all duration-200">
               <ImagePlus className="h-8 w-8 text-gray-400 mb-2" />
               <p className="text-xs text-gray-500 text-center mb-4">
                 Upload a showcase image (JPEG, PNG, WebP) or video (MP4, WebM)
@@ -135,7 +135,7 @@ export function NewPortfolioForm() {
               <button
                 type="button"
                 onClick={handleRemoveMedia}
-                className="absolute top-2 right-2 p-1.5 rounded-full bg-red-650 hover:bg-red-700 text-white shadow transition-all duration-200 active:scale-95"
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-red-600 hover:bg-red-700 text-white shadow transition-all duration-200 active:scale-95"
                 title="Remove file"
               >
                 <X className="h-3.5 w-3.5" />

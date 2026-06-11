@@ -35,7 +35,25 @@ export async function listPublicWorkFeedPosts(
   const page = params.page ?? 1;
   const offset = (page - 1) * PAGE_SIZE;
 
-  let query = supabase
+  const { data: idRows, error: rpcError } = await supabase.rpc('search_work_feed_ids', {
+    search_query: params.q || null,
+    category_slug: params.category || null,
+    sort_by: params.sort || 'newest',
+    post_type_filter: params.postType || null,
+    media_type_filter: params.type || null,
+    verified_only: params.verified === true,
+    limit_count: PAGE_SIZE + 1,
+    offset_count: offset,
+  });
+
+  if (rpcError) throw new Error(`Failed to fetch work feed: ${rpcError.message}`);
+
+  const postIds = (idRows ?? []).map((r: any) => r.id);
+  if (postIds.length === 0) return { data: [], hasNext: false };
+
+  const fetchIds = postIds.slice(0, PAGE_SIZE);
+
+  const { data, error } = await supabase
     .from('creator_posts')
     .select(`
       *,
@@ -62,101 +80,19 @@ export async function listPublicWorkFeedPosts(
       post_likes ( profile_id ),
       post_saves ( profile_id )
     `)
-    .eq('visibility', 'public')
-    .eq('moderation_status', 'approved')
-    .is('deleted_at', null)
-    .is('creator_profiles.deleted_at', null)
-    .eq('creator_profiles.profiles.status', 'active')
-    .is('creator_profiles.profiles.deleted_at', null);
+    .in('id', fetchIds);
 
-  if (params.postType) {
-    query = query.eq('post_type', params.postType);
-  }
+  if (error) throw new Error(`Failed to fetch work feed details: ${error.message}`);
 
-  if (params.type === 'video') {
-    query = query.eq('post_type', 'short_video');
-  } else if (params.type === 'image') {
-    query = query.in('post_type', ['image', 'carousel', 'portfolio', 'listing_showcase']);
-  }
+  const idToIndex = new Map<string, number>(fetchIds.map((id: string, index: number) => [id, index]));
+  const sorted = (data ?? []).sort((a: any, b: any) => {
+    return (idToIndex.get(a.id) ?? 0) - (idToIndex.get(b.id) ?? 0);
+  });
 
-  if (params.verified === true) {
-    query = query.eq('creator_profiles.is_verified', true);
-  }
-
-  if (params.q) {
-    const term = `%${params.q.trim().replace(/[%_]/g, '\\$&')}%`;
-    query = query.or(
-      `caption.ilike.${term},creator_profiles.display_name.ilike.${term},listings.title.ilike.${term},creator_profiles.profiles.username.ilike.${term}`
-    );
-  }
-
-  if (params.category) {
-    let categoryId = params.category;
-    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/i.test(params.category);
-    if (!isUuid) {
-      const { data: cat } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('slug', params.category)
-        .single();
-      if (cat) {
-        categoryId = cat.id;
-      } else {
-        return { data: [], hasNext: false };
-      }
-    }
-
-    // Get all creator profiles in this category
-    const { data: creatorsResult } = await supabase
-      .from('creator_profiles')
-      .select('id')
-      .eq('primary_category_id', categoryId);
-    const creatorProfileIds = (creatorsResult ?? []).map((cp: any) => cp.id);
-
-    // Get all listings in this category
-    const { data: listingsResult } = await supabase
-      .from('listings')
-      .select('id')
-      .eq('category_id', categoryId);
-    const listingIds = (listingsResult ?? []).map((l: any) => l.id);
-
-    const filterParts: string[] = [];
-    if (creatorProfileIds.length > 0) {
-      filterParts.push(`creator_profile_id.in.(${creatorProfileIds.join(',')})`);
-    }
-    if (listingIds.length > 0) {
-      filterParts.push(`listing_id.in.(${listingIds.join(',')})`);
-    }
-
-    if (filterParts.length > 0) {
-      query = query.or(filterParts.join(','));
-    } else {
-      return { data: [], hasNext: false };
-    }
-  }
-
-  if (params.sort === 'popular') {
-    query = query
-      .order('like_count', { ascending: false })
-      .order('save_count', { ascending: false })
-      .order('comment_count', { ascending: false })
-      .order('view_count', { ascending: false })
-      .order('created_at', { ascending: false });
-  } else {
-    query = query.order('created_at', { ascending: false });
-  }
-
-  query = query.range(offset, offset + PAGE_SIZE);
-
-  const { data, error } = await query;
-  if (error) throw new Error(`Failed to fetch work feed: ${error.message}`);
-
-  const rows = (data ?? []) as any[];
-  const hasNext = rows.length > PAGE_SIZE;
-  const slice = rows.slice(0, PAGE_SIZE);
+  const hasNext = postIds.length > PAGE_SIZE;
 
   return {
-    data: slice.map((row) => mapRowToPost(row, viewerProfileId)),
+    data: sorted.map((row) => mapRowToPost(row, viewerProfileId)),
     hasNext,
   };
 }

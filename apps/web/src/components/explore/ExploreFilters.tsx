@@ -15,7 +15,7 @@ export function ExploreFilters({ categories }: ExploreFiltersProps) {
   const currentCategory = searchParams.get('category') ?? 'all';
   const currentType = searchParams.get('type') ?? 'all';
   const currentVerified = searchParams.get('verified') ?? 'all';
-  const currentSort = searchParams.get('sort') ?? 'latest';
+  const currentSort = searchParams.get('sort') ?? 'newest';
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -90,7 +90,7 @@ export function ExploreFilters({ categories }: ExploreFiltersProps) {
             onChange={(e) => updateFilter('sort', e.target.value)}
             className="w-full text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400 transition"
           >
-            <option value="latest">Latest</option>
+            <option value="newest">Latest</option>
             <option value="popular">Popular</option>
           </select>
         </div>

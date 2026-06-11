@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path';
 
 export default defineConfig({
   test: {
@@ -9,5 +10,11 @@ export default defineConfig({
       'tests/**/*.test.ts'
     ],
     globals: true
+  },
+  resolve: {
+    alias: {
+      '~': path.resolve(__dirname, './apps/web/src'),
+      'next/cache': path.resolve(__dirname, './tests/mocks/next-cache.ts')
+    }
   }
 });

@@ -129,7 +129,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <Suspense fallback={
         <Card className="w-full max-w-md p-8 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-650" />
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
         </Card>
       }>
         <LoginFormContent />

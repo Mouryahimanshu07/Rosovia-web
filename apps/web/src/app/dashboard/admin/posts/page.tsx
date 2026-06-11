@@ -199,7 +199,7 @@ export default async function AdminPostsPage({
             href={`/dashboard/admin/posts?page=${page + 1}${
               searchParams.status ? `&status=${searchParams.status}` : ''
             }`}
-            className="text-sm text-indigo-650 hover:text-indigo-550 font-semibold"
+            className="text-sm text-indigo-600 hover:text-indigo-500 font-semibold"
           >
             Next page →
           </a>

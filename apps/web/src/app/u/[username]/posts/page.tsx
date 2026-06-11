@@ -124,7 +124,7 @@ export default async function UserPostsPage({ params }: Props) {
                 <span className="font-semibold">
                   {pending} post{pending > 1 ? 's are' : ' is'} pending review.
                 </span>{' '}
-                pending review normally takes admin approval. Posts are typically reviewed within 24 hours.
+                Your posts will become publicly visible once approved by a moderator.
               </div>
             </div>
           )}

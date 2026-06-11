@@ -5,17 +5,18 @@ import { listPublicWorkFeedPosts } from '../post.repository';
 describe('Public Work Feed Filtering and Sorting Tests', () => {
   let mockSupabase: any;
   let queryChain: any;
+  let rpcMock: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
+    rpcMock = vi.fn().mockResolvedValue({
+      data: [{ id: 'post-1' }],
+      error: null,
+    });
+
     queryChain = {
-      eq: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockResolvedValue({
+      in: vi.fn().mockResolvedValue({
         data: [
           {
             id: 'post-1',
@@ -32,9 +33,19 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
               id: 'creator-123',
               display_name: 'Jane Potter',
               slug: 'jane-potter',
+              user_id: 'user-123',
+              is_verified: false,
+              verification_level: 'none',
+              profiles: {
+                username: 'janepotter',
+                status: 'active',
+                deleted_at: null,
+              },
             },
             creator_post_media: [],
             listings: null,
+            post_likes: [],
+            post_saves: [],
           },
         ],
         error: null,
@@ -42,44 +53,11 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
     };
 
     mockSupabase = {
+      rpc: rpcMock,
       from: vi.fn().mockImplementation((table: string) => {
         if (table === 'creator_posts') {
           return {
             select: vi.fn().mockReturnValue(queryChain),
-          };
-        }
-        if (table === 'categories') {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            single: vi.fn().mockImplementation(() => {
-              return Promise.resolve({
-                data: { id: 'cat-uuid-123', slug: 'clay-art' },
-                error: null,
-              });
-            }),
-          };
-        }
-        if (table === 'creator_profiles') {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockImplementation(() => {
-              return Promise.resolve({
-                data: [{ id: 'creator-uuid-123' }],
-                error: null,
-              });
-            }),
-          };
-        }
-        if (table === 'listings') {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockImplementation(() => {
-              return Promise.resolve({
-                data: [{ id: 'listing-uuid-123' }],
-                error: null,
-              });
-            }),
           };
         }
         return {
@@ -88,16 +66,25 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
           single: vi.fn().mockResolvedValue({ data: null, error: null }),
         };
       }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
     };
   });
 
   it('queries database with approved public status constraints', async () => {
     const res = await listPublicWorkFeedPosts(mockSupabase as SupabaseClient);
 
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+      search_query: null,
+      category_slug: null,
+      sort_by: 'newest',
+      post_type_filter: null,
+      media_type_filter: null,
+      verified_only: false,
+    }));
     expect(mockSupabase.from).toHaveBeenCalledWith('creator_posts');
-    expect(queryChain.eq).toHaveBeenCalledWith('visibility', 'public');
-    expect(queryChain.eq).toHaveBeenCalledWith('moderation_status', 'approved');
-    expect(queryChain.is).toHaveBeenCalledWith('deleted_at', null);
+    expect(queryChain.in).toHaveBeenCalledWith('id', ['post-1']);
     expect(res.data).toHaveLength(1);
     expect(res.data?.[0]?.id).toBe('post-1');
   });
@@ -107,7 +94,9 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
       postType: 'portfolio',
     });
 
-    expect(queryChain.eq).toHaveBeenCalledWith('post_type', 'portfolio');
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+      post_type_filter: 'portfolio',
+    }));
   });
 
   it('resolves category slug and filters by category using OR query', async () => {
@@ -115,29 +104,13 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
       category: 'clay-art',
     });
 
-    expect(mockSupabase.from).toHaveBeenCalledWith('categories');
-    expect(queryChain.or).toHaveBeenCalledWith(
-      'creator_profile_id.in.(creator-uuid-123),listing_id.in.(listing-uuid-123)'
-    );
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+      category_slug: 'clay-art',
+    }));
   });
 
   it('returns empty results if category slug does not resolve', async () => {
-    // Override categories to simulate slug not found
-    mockSupabase.from = vi.fn().mockImplementation((table: string) => {
-      if (table === 'categories') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
-        };
-      }
-      if (table === 'creator_posts') {
-        return {
-          select: vi.fn().mockReturnValue(queryChain),
-        };
-      }
-      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: null, error: null }) };
-    });
+    rpcMock.mockResolvedValueOnce({ data: [], error: null });
 
     const res = await listPublicWorkFeedPosts(mockSupabase as SupabaseClient, {
       category: 'non-existent-category',
@@ -152,7 +125,9 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
       sort: 'latest',
     });
 
-    expect(queryChain.order).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+      sort_by: 'latest',
+    }));
   });
 
   it('sorts by popular by ordering by like, save, comment, and view counters desc', async () => {
@@ -160,11 +135,9 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
       sort: 'popular',
     });
 
-    expect(queryChain.order).toHaveBeenNthCalledWith(1, 'like_count', { ascending: false });
-    expect(queryChain.order).toHaveBeenNthCalledWith(2, 'save_count', { ascending: false });
-    expect(queryChain.order).toHaveBeenNthCalledWith(3, 'comment_count', { ascending: false });
-    expect(queryChain.order).toHaveBeenNthCalledWith(4, 'view_count', { ascending: false });
-    expect(queryChain.order).toHaveBeenNthCalledWith(5, 'created_at', { ascending: false });
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+      sort_by: 'popular',
+    }));
   });
 
   it('applies query q parameter to match against caption, display_name, listing title, and creator username', async () => {
@@ -172,8 +145,8 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
       q: 'handcrafted',
     });
 
-    expect(queryChain.or).toHaveBeenCalledWith(
-      'caption.ilike.%handcrafted%,creator_profiles.display_name.ilike.%handcrafted%,listings.title.ilike.%handcrafted%,creator_profiles.profiles.username.ilike.%handcrafted%'
-    );
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+      search_query: 'handcrafted',
+    }));
   });
 });

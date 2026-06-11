@@ -8,6 +8,18 @@ import {
   getOrCreateConversationForCurrentUser,
 } from '@rosovia/api';
 import { messageSendSchema, conversationCreateSchema } from '@rosovia/core';
+import { headers } from 'next/headers';
+import { rateLimit } from '~/lib/rate-limit';
+
+async function checkRateLimit(limit: number) {
+  const supabase = createWebServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const identifier = user?.id || headers().get('x-forwarded-for') || '127.0.0.1';
+  const limitRes = await rateLimit(identifier, limit, 60000);
+  if (!limitRes.success) {
+    throw new Error('Rate limit exceeded. Please try again later.');
+  }
+}
 
 type ActionResult<T = undefined> =
   | { success: true; data?: T }
@@ -26,6 +38,7 @@ export async function sendMessageAction(
   }
 
   try {
+    await checkRateLimit(30);
     const supabase = createWebServerClient();
     await sendCurrentUserMessage(supabase, {
       conversationId: parsed.data.conversationId,

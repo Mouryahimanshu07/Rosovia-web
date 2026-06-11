@@ -406,7 +406,7 @@ export function ProfileForm({ profile, creatorProfile, categories }: ProfileForm
                   id="acceptsCustomOrders"
                   type="checkbox"
                   {...register('acceptsCustomOrders')}
-                  className="h-4 w-4 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500"
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <label htmlFor="acceptsCustomOrders" className="text-sm font-semibold text-gray-700 select-none">
                   Accept Custom Orders

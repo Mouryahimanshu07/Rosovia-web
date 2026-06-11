@@ -77,17 +77,17 @@ export async function followCreator(
     throw new Error('You cannot follow yourself');
   }
 
-  // Check for duplicate follow
-  const existing = await getFollowRow(supabase, profile.id, input.creatorProfileId);
+  // Check for duplicate follow in profile_follows
+  const existing = await getProfileFollowRow(supabase, profile.id, cp.user_id);
   if (existing) {
-    const followerCount = await getFollowerCount(supabase, input.creatorProfileId);
+    const followerCount = await getProfileFollowerCount(supabase, cp.user_id);
     return { success: true, isFollowing: true, followerCount };
   }
 
   // TODO: Rate-limit hook — max X follow actions per minute per user
 
   try {
-    const follow = await insertFollow(supabase, profile.id, input.creatorProfileId);
+    const follow = await insertProfileFollow(supabase, profile.id, cp.user_id);
 
     // Notify creator
     try {
@@ -108,7 +108,7 @@ export async function followCreator(
     }
   }
 
-  const followerCount = await getFollowerCount(supabase, input.creatorProfileId);
+  const followerCount = await getProfileFollowerCount(supabase, cp.user_id);
   return { success: true, isFollowing: true, followerCount };
 }
 
@@ -123,15 +123,28 @@ export async function unfollowCreator(
   const input = unfollowCreatorSchema.parse(rawInput);
   const profile = await resolveActiveProfile(supabase);
 
+  // Verify target creator exists
+  const { data: creatorData, error: creatorError } = await supabase
+    .from('creator_profiles')
+    .select('id, user_id')
+    .eq('id', input.creatorProfileId)
+    .single();
+
+  if (creatorError || !creatorData) {
+    throw new Error('Creator not found or unavailable');
+  }
+
+  const cp = creatorData as any;
+
   // Check if follow row exists
-  const existing = await getFollowRow(supabase, profile.id, input.creatorProfileId);
+  const existing = await getProfileFollowRow(supabase, profile.id, cp.user_id);
   if (!existing) {
-    const followerCount = await getFollowerCount(supabase, input.creatorProfileId);
+    const followerCount = await getProfileFollowerCount(supabase, cp.user_id);
     return { success: true, isFollowing: false, followerCount };
   }
 
-  await deleteFollow(supabase, profile.id, input.creatorProfileId);
-  const followerCount = await getFollowerCount(supabase, input.creatorProfileId);
+  await deleteProfileFollow(supabase, profile.id, cp.user_id);
+  const followerCount = await getProfileFollowerCount(supabase, cp.user_id);
   return { success: true, isFollowing: false, followerCount };
 }
 
@@ -149,8 +162,18 @@ export async function isCurrentUserFollowing(
   const profile = await getProfileByAuthUserId(supabase, user.id);
   if (!profile) return false;
 
-  return isFollowing(supabase, profile.id, creatorProfileId);
+  const { data: creator } = await supabase
+    .from('creator_profiles')
+    .select('user_id')
+    .eq('id', creatorProfileId)
+    .maybeSingle();
+
+  if (!creator) return false;
+
+  const row = await getProfileFollowRow(supabase, profile.id, creator.user_id);
+  return row !== null;
 }
+
 
 // ---------------------------------------------------------------------------
 // Follow a user profile (universal)

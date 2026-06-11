@@ -246,7 +246,7 @@ export default async function UserPublicProfilePage({ params }: Props) {
               </div>
               
               <div className="flex items-center justify-center md:justify-start gap-2 text-xs md:text-sm text-gray-500 font-semibold flex-wrap">
-                <span className="text-indigo-650">@{baseProfile.username}</span>
+                <span className="text-indigo-600">@{baseProfile.username}</span>
                 <span>•</span>
                 <span className="capitalize px-2 py-0.5 rounded-full bg-indigo-50 text-[10px] font-extrabold text-indigo-700 border border-indigo-100/50">
                   {baseProfile.role}
@@ -286,11 +286,11 @@ export default async function UserPublicProfilePage({ params }: Props) {
             <span className="text-base font-bold text-gray-900 leading-none">{postsCount}</span>
             <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Posts</span>
           </div>
-          <Link href={`/u/${baseProfile.username}/followers`} className="flex items-baseline gap-1.5 justify-center md:justify-start hover:text-indigo-650 transition">
+          <Link href={`/u/${baseProfile.username}/followers`} className="flex items-baseline gap-1.5 justify-center md:justify-start hover:text-indigo-600 transition">
             <span className="text-base font-bold text-gray-900 leading-none">{followStats.followersCount}</span>
             <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Followers</span>
           </Link>
-          <Link href={`/u/${baseProfile.username}/following`} className="flex items-baseline gap-1.5 justify-center md:justify-start hover:text-indigo-650 transition">
+          <Link href={`/u/${baseProfile.username}/following`} className="flex items-baseline gap-1.5 justify-center md:justify-start hover:text-indigo-600 transition">
             <span className="text-base font-bold text-gray-900 leading-none">{followStats.followingCount}</span>
             <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Following</span>
           </Link>

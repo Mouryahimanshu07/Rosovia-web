@@ -4,6 +4,18 @@ import { revalidatePath } from 'next/cache';
 import { createWebServerClient } from '~/lib/supabase/server';
 import { followCreator, unfollowCreator, followProfile, unfollowProfile } from '@rosovia/api';
 import { captureAppError } from '~/lib/analytics/capture-error';
+import { headers } from 'next/headers';
+import { rateLimit } from '~/lib/rate-limit';
+
+async function checkRateLimit(limit: number) {
+  const supabase = createWebServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const identifier = user?.id || headers().get('x-forwarded-for') || '127.0.0.1';
+  const limitRes = await rateLimit(identifier, limit, 60000);
+  if (!limitRes.success) {
+    throw new Error('Rate limit exceeded. Please try again later.');
+  }
+}
 
 type ActionResult<T = undefined> =
   | { success: true; data?: T }
@@ -17,6 +29,7 @@ export async function followCreatorAction(
   creatorProfileId: string
 ): Promise<ActionResult> {
   try {
+    await checkRateLimit(20);
     const supabase = createWebServerClient();
     await followCreator(supabase, { creatorProfileId });
     revalidatePath('/creators');
@@ -62,6 +75,7 @@ export async function followProfileAction(
   username: string
 ): Promise<ActionResult<{ isFollowing: boolean; followerCount: number }>> {
   try {
+    await checkRateLimit(20);
     const supabase = createWebServerClient();
     const result = await followProfile(supabase, { followingProfileId });
     revalidatePath(`/u/${username}`);

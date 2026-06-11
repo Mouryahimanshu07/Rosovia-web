@@ -66,13 +66,15 @@ export async function getFollowerCount(
   supabase: SupabaseClient,
   creatorProfileId: string
 ): Promise<number> {
-  const { count, error } = await supabase
-    .from('creator_follows')
-    .select('*', { count: 'exact', head: true })
-    .eq('creator_profile_id', creatorProfileId);
+  const { data: creator } = await supabase
+    .from('creator_profiles')
+    .select('user_id')
+    .eq('id', creatorProfileId)
+    .maybeSingle();
 
-  if (error) throw new Error(`Failed to count followers: ${error.message}`);
-  return count ?? 0;
+  if (!creator) return 0;
+
+  return getProfileFollowerCount(supabase, creator.user_id);
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +86,15 @@ export async function isFollowing(
   followerProfileId: string,
   creatorProfileId: string
 ): Promise<boolean> {
-  const row = await getFollowRow(supabase, followerProfileId, creatorProfileId);
+  const { data: creator } = await supabase
+    .from('creator_profiles')
+    .select('user_id')
+    .eq('id', creatorProfileId)
+    .maybeSingle();
+
+  if (!creator) return false;
+
+  const row = await getProfileFollowRow(supabase, followerProfileId, creator.user_id);
   return row !== null;
 }
 

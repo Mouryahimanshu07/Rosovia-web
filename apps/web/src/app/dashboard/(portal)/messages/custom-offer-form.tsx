@@ -55,14 +55,14 @@ export function CustomOfferForm({ inquiryId }: CustomOfferFormProps) {
 
   if (!isOpen) {
     return (
-      <div className="px-6 py-3 border-b border-gray-150 bg-indigo-50/40 flex items-center justify-between">
+      <div className="px-6 py-3 border-b border-gray-200 bg-indigo-50/40 flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-semibold text-indigo-950">
           <span className="text-sm">⚡</span>
           <span>Inquiry active: Propose a custom item with single-click checkout.</span>
         </div>
         <button
           onClick={() => setIsOpen(true)}
-          className="rounded-md bg-indigo-650 hover:bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition"
+          className="rounded-md bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition"
         >
           Generate Custom Offer
         </button>

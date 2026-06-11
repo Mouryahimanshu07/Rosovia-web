@@ -56,7 +56,7 @@ export function ProfileTalentChips({
         <div className="mt-1 flex items-center justify-center md:justify-start">
           <Link
             href={`/u/${username}/edit`}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-650 hover:bg-indigo-100 border border-indigo-100/50 text-xs font-bold transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100/50 text-xs font-bold transition-colors cursor-pointer"
           >
             ✨ Add talent
           </Link>
@@ -83,7 +83,7 @@ export function ProfileTalentChips({
       className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-semibold border transition whitespace-nowrap ${
         isCategory
           ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100/60'
-          : 'bg-gray-50 text-gray-650 border-gray-200 hover:bg-gray-100/60'
+          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100/60'
       }`}
     >
       {chip}

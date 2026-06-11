@@ -119,7 +119,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
             <div className="pt-2">
               <Link
                 href="/explore"
-                className="inline-flex items-center rounded-full bg-gray-905 px-6 py-2.5 text-xs font-semibold text-white hover:bg-gray-800 transition shadow-sm"
+                className="inline-flex items-center rounded-full bg-gray-900 px-6 py-2.5 text-xs font-semibold text-white hover:bg-gray-800 transition shadow-sm"
               >
                 Clear Search
               </Link>

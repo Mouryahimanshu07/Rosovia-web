@@ -16,13 +16,22 @@ import {
 describe('Post Engagement and Custom Filters Repository Tests', () => {
   let mockSupabase: any;
   let queryChain: any;
+  let rpcMock: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
+    rpcMock = vi.fn().mockResolvedValue({
+      data: [{ id: 'post-1' }],
+      error: null,
+    });
+
     queryChain = {
       eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
+      in: vi.fn().mockResolvedValue({
+        data: [],
+        error: null,
+      }),
       is: vi.fn().mockReturnThis(),
       ilike: vi.fn().mockReturnThis(),
       or: vi.fn().mockReturnThis(),
@@ -39,9 +48,13 @@ describe('Post Engagement and Custom Filters Repository Tests', () => {
     };
 
     mockSupabase = {
+      rpc: rpcMock,
       from: vi.fn().mockImplementation((table: string) => {
         return queryChain;
       }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
     };
   });
 
@@ -52,7 +65,9 @@ describe('Post Engagement and Custom Filters Repository Tests', () => {
         type: 'video',
       });
 
-      expect(queryChain.eq).toHaveBeenCalledWith('post_type', 'short_video');
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+        media_type_filter: 'video',
+      }));
     });
 
     it('applies type=image as post_type in array filter', async () => {
@@ -60,12 +75,9 @@ describe('Post Engagement and Custom Filters Repository Tests', () => {
         type: 'image',
       });
 
-      expect(queryChain.in).toHaveBeenCalledWith('post_type', [
-        'image',
-        'carousel',
-        'portfolio',
-        'listing_showcase',
-      ]);
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+        media_type_filter: 'image',
+      }));
     });
 
     it('filters by verified creators when verified=true', async () => {
@@ -73,7 +85,9 @@ describe('Post Engagement and Custom Filters Repository Tests', () => {
         verified: true,
       });
 
-      expect(queryChain.eq).toHaveBeenCalledWith('creator_profiles.is_verified', true);
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+        verified_only: true,
+      }));
     });
 
     it('sorts by popular by ordering by like, save, comment, and view counters desc', async () => {
@@ -81,11 +95,9 @@ describe('Post Engagement and Custom Filters Repository Tests', () => {
         sort: 'popular',
       });
 
-      expect(queryChain.order).toHaveBeenNthCalledWith(1, 'like_count', { ascending: false });
-      expect(queryChain.order).toHaveBeenNthCalledWith(2, 'save_count', { ascending: false });
-      expect(queryChain.order).toHaveBeenNthCalledWith(3, 'comment_count', { ascending: false });
-      expect(queryChain.order).toHaveBeenNthCalledWith(4, 'view_count', { ascending: false });
-      expect(queryChain.order).toHaveBeenNthCalledWith(5, 'created_at', { ascending: false });
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+        sort_by: 'popular',
+      }));
     });
 
     it('matches username in query search', async () => {
@@ -93,9 +105,9 @@ describe('Post Engagement and Custom Filters Repository Tests', () => {
         q: 'john',
       });
 
-      expect(queryChain.or).toHaveBeenCalledWith(
-        expect.stringContaining('creator_profiles.profiles.username.ilike.%john%')
-      );
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('search_work_feed_ids', expect.objectContaining({
+        search_query: 'john',
+      }));
     });
   });
 

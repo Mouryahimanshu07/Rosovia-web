@@ -2,7 +2,12 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const connectionString = 'postgresql://postgres.ggcgsiwsfsdojvygjyoi:Himanshu%232857@aws-1-ap-south-1.pooler.supabase.com:5432/postgres';
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  console.error('CRITICAL: DATABASE_URL environment variable is missing.');
+  process.exit(1);
+}
 
 async function main() {
   const client = new Client({ connectionString });
@@ -23,3 +28,4 @@ async function main() {
 }
 
 main().catch(console.error);
+
