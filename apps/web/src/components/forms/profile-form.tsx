@@ -131,6 +131,10 @@ export function ProfileForm({ profile, creatorProfile, categories }: ProfileForm
     primaryCategoryId: creatorProfile?.primary_category_id ?? '',
     websiteUrl: creatorProfile?.website_url ?? '',
     introVideoUrl: creatorProfile?.intro_video_url ?? '',
+    acceptsCustomOrders: (creatorProfile as any)?.accepts_custom_orders ?? true,
+    customOrderDescription: (creatorProfile as any)?.custom_order_description ?? '',
+    customOrderStartingPrice: (creatorProfile as any)?.custom_order_starting_price ?? '',
+    customOrderDeliveryDays: (creatorProfile as any)?.custom_order_delivery_days ?? '',
   };
 
   const {
@@ -388,6 +392,68 @@ export function ProfileForm({ profile, creatorProfile, categories }: ProfileForm
                   className={textareaClass}
                 />
               </Field>
+            </SectionCard>
+
+            {/* Custom Order Settings */}
+            <SectionCard
+              icon={<Tag className="h-4 w-4" />}
+              title="Custom Order Settings"
+              subtitle="Configure your custom order preferences"
+              defaultOpen={true}
+            >
+              <div className="flex items-center gap-3">
+                <input
+                  id="acceptsCustomOrders"
+                  type="checkbox"
+                  {...register('acceptsCustomOrders')}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500"
+                />
+                <label htmlFor="acceptsCustomOrders" className="text-sm font-semibold text-gray-700 select-none">
+                  Accept Custom Orders
+                </label>
+              </div>
+
+              <Field
+                label="Custom Order Description"
+                hint="Describe what type of custom work you accept, requirements, and process."
+                error={errors.customOrderDescription?.message as string}
+              >
+                <textarea
+                  id="customOrderDescription"
+                  rows={4}
+                  placeholder="Describe your custom commission preferences, what details you need from buyers..."
+                  {...register('customOrderDescription')}
+                  className={textareaClass}
+                />
+              </Field>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <Field
+                  label="Starting Price (₹)"
+                  hint="Optional starting price for custom orders."
+                  error={errors.customOrderStartingPrice?.message as string}
+                >
+                  <Input
+                    id="customOrderStartingPrice"
+                    type="number"
+                    placeholder="e.g. 5000"
+                    {...register('customOrderStartingPrice', { valueAsNumber: true })}
+                  />
+                </Field>
+
+                <Field
+                  label="Typical Delivery Time (days)"
+                  hint="Typical timeframe in days."
+                  error={errors.customOrderDeliveryDays?.message as string}
+                >
+                  <Input
+                    id="customOrderDeliveryDays"
+                    type="number"
+                    placeholder="e.g. 14"
+                    {...register('customOrderDeliveryDays', { valueAsNumber: true })}
+                  />
+                </Field>
+              </div>
             </SectionCard>
           </>
         )}

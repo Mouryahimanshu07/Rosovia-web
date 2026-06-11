@@ -23,6 +23,7 @@ export interface CreatorPost {
   like_count: number;
   save_count: number;
   view_count: number;
+  comment_count: number;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -92,4 +93,6 @@ export interface FeedParams {
   category?: string;
   sort?: 'newest' | 'latest' | 'popular';
   q?: string;
+  type?: 'all' | 'image' | 'video';
+  verified?: boolean;
 }

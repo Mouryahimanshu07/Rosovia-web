@@ -61,9 +61,26 @@ export async function listCreatorPublicPortfolioMedia(
     .in('status', ['approved', 'uploaded'])
     .is('deleted_at', null)
     .is('listing_id', null)
+    .like('storage_key', `%/${ownerId}/portfolio/%`)
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(`Failed to list creator public portfolio media: ${error.message}`);
+  return (data ?? []) as MediaAsset[];
+}
+
+export async function listCreatorPortfolioMedia(
+  supabase: SupabaseClient,
+  ownerId: string
+): Promise<MediaAsset[]> {
+  const { data, error } = await supabase
+    .from('media_assets')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .is('deleted_at', null)
+    .like('storage_key', `%/${ownerId}/portfolio/%`)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Failed to list creator portfolio media: ${error.message}`);
   return (data ?? []) as MediaAsset[];
 }
 

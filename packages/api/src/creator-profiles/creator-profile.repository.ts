@@ -97,6 +97,10 @@ export async function createCreatorProfile(
     headline?: string | null;
     website_url?: string | null;
     profile_theme?: string | null;
+    accepts_custom_orders?: boolean;
+    custom_order_description?: string | null;
+    custom_order_starting_price?: number | null;
+    custom_order_delivery_days?: number | null;
   }
 ): Promise<CreatorProfile> {
   const { data: created, error } = await supabase
@@ -133,6 +137,10 @@ export async function updateCreatorProfile(
     headline?: string | null;
     website_url?: string | null;
     profile_theme?: string | null;
+    accepts_custom_orders?: boolean;
+    custom_order_description?: string | null;
+    custom_order_starting_price?: number | null;
+    custom_order_delivery_days?: number | null;
   }
 ): Promise<CreatorProfile> {
   const { data: updated, error } = await supabase
@@ -176,6 +184,10 @@ export function mapProfileRowToCreatorProfile(row: any): CreatorProfileWithCateg
     headline: cp?.headline ?? null,
     website_url: cp?.website_url ?? null,
     profile_theme: cp?.profile_theme ?? 'default',
+    accepts_custom_orders: cp?.accepts_custom_orders ?? true,
+    custom_order_description: cp?.custom_order_description ?? null,
+    custom_order_starting_price: cp?.custom_order_starting_price !== undefined ? Number(cp.custom_order_starting_price) : null,
+    custom_order_delivery_days: cp?.custom_order_delivery_days ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at || row.created_at,
     category_name: cat?.name ?? null,
@@ -197,7 +209,7 @@ export async function listPublicCreatorProfiles(
   const offset = params.offset ?? 0;
 
   const { data, error } = await supabase
-    .from('profiles')
+    .from('public_profiles')
     .select(`
       id,
       full_name,
@@ -223,12 +235,14 @@ export async function listPublicCreatorProfiles(
         headline,
         website_url,
         profile_theme,
+        accepts_custom_orders,
+        custom_order_description,
+        custom_order_starting_price,
+        custom_order_delivery_days,
         categories ( name, slug )
       )
     `)
     .eq('role', 'creator')
-    .eq('status', 'active')
-    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 

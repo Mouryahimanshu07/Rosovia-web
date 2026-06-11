@@ -9,6 +9,7 @@ import type {
   CategorySearchParams,
   PaginatedResult,
   VerificationLevel,
+  Profile,
 } from '@rosovia/core';
 
 const PAGE_SIZE = 12;
@@ -329,7 +330,7 @@ export async function searchPublicCreators(
 
   // Single data query — no separate count query
   let dataQuery = supabase
-    .from('profiles')
+    .from('public_profiles')
     .select(`
       id,
       full_name,
@@ -358,9 +359,7 @@ export async function searchPublicCreators(
         categories ( name, slug )
       )
     `)
-    .eq('role', 'creator')
-    .eq('status', 'active')
-    .is('deleted_at', null);
+    .eq('role', 'creator');
 
   // Apply filters
   if (params.q) {
@@ -406,10 +405,20 @@ export async function searchPublicCreators(
 
   // Filter in-memory to match PostgREST joined-filter semantics
   const filteredRows = pageRows.filter((r: any) => {
-    if (params.category && (!r.creator_profiles || r.creator_profiles.length === 0)) {
+    const cpRaw = r.creator_profiles;
+    const cp = Array.isArray(cpRaw) ? cpRaw[0] : cpRaw;
+
+    if (!cp) {
+      if (params.category || params.verifiedOnly) {
+        return false;
+      }
+      return true;
+    }
+
+    if (params.category && cp.primary_category_id !== params.category) {
       return false;
     }
-    if (params.verifiedOnly && (!r.creator_profiles || r.creator_profiles.length === 0 || !r.creator_profiles[0]?.is_verified)) {
+    if (params.verifiedOnly && !cp.is_verified) {
       return false;
     }
     return true;
@@ -503,4 +512,43 @@ export async function getCategoryPageData(
   );
 
   return { listings, creators };
+}
+
+/**
+ * Searches active public profiles by query string (display_name, username, bio, location).
+ */
+export async function searchPublicProfiles(
+  supabase: SupabaseClient,
+  params: { q?: string; page?: number; limit?: number }
+): Promise<PaginatedResult<Profile>> {
+  const page = params.page ?? 1;
+  const pageSize = params.limit ?? PAGE_SIZE;
+  const offset = (page - 1) * pageSize;
+  const fetchLimit = pageSize + 1;
+
+  let query = supabase
+    .from('public_profiles')
+    .select('*');
+
+  if (params.q && params.q.trim().length > 0) {
+    const term = `%${params.q.trim().replace(/[%_]/g, '\\$&')}%`;
+    query = query.or(
+      `display_name.ilike.${term},username.ilike.${term},bio.ilike.${term},city.ilike.${term},state.ilike.${term}`
+    );
+  }
+
+  query = query
+    .order('created_at', { ascending: false })
+    .range(offset, offset + fetchLimit - 1);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to search public profiles: ${error.message}`);
+
+  const raw = data ?? [];
+  const pageRows = raw.slice(0, pageSize) as Profile[];
+
+  return {
+    data: pageRows,
+    meta: buildPaginationMeta(page, pageSize, raw.length),
+  };
 }

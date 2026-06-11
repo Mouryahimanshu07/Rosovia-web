@@ -90,6 +90,8 @@ export const feedParamsSchema = z.object({
   category: z.string().max(100).optional(),
   sort: z.enum(['newest', 'latest', 'popular']).optional().default('newest'),
   q: z.string().max(100).optional(),
+  type: z.enum(['all', 'image', 'video']).optional(),
+  verified: z.preprocess((val) => val === 'true' || val === true, z.boolean()).optional(),
 });
 
 // ---------------------------------------------------------------------------

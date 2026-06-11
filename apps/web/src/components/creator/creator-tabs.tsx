@@ -43,6 +43,7 @@ export function CreatorTabs({
 }: CreatorTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('portfolio');
   const [activeMedia, setActiveMedia] = useState<MediaAsset | null>(null);
+  const [showRequestForm, setShowRequestForm] = useState(false);
 
   // Smooth anchor scrolling for custom order requests
   useEffect(() => {
@@ -50,6 +51,7 @@ export function CreatorTabs({
       const handleHash = () => {
         if (window.location.hash === '#custom-order-panel') {
           setActiveTab('custom_order');
+          setShowRequestForm(true);
           setTimeout(() => {
             const el = document.getElementById('custom-order-panel');
             if (el) {
@@ -159,7 +161,7 @@ export function CreatorTabs({
                   {/* Add Portfolio CTA Card (Owner only) */}
                   {isOwnProfile && (
                     <Link
-                      href="/dashboard/creator/listings/new"
+                      href="/dashboard/portfolio/new"
                       className="group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/20 transition-all duration-300 aspect-square p-6 text-center"
                     >
                       <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -172,6 +174,17 @@ export function CreatorTabs({
 
                   {portfolioMedia.map((media) => {
                     const isVideo = media.media_type === 'video' || media.mime_type.startsWith('video/');
+                    let displayTitle = media.mime_type.split('/')[1]?.toUpperCase() ?? 'FILE';
+                    if (media.alt_text) {
+                      try {
+                        const parsed = JSON.parse(media.alt_text);
+                        if (parsed && parsed.title) {
+                          displayTitle = parsed.title;
+                        }
+                      } catch {
+                        displayTitle = media.alt_text;
+                      }
+                    }
                     return (
                       <div
                         key={media.id}
@@ -215,12 +228,12 @@ export function CreatorTabs({
                             
                             {/* Hover details overlay */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                              <div className="text-white">
+                              <div className="text-white text-left w-full">
                                 <p className="text-xs uppercase font-bold tracking-widest text-indigo-300">
                                   {media.media_type}
                                 </p>
                                 <p className="text-sm font-semibold truncate max-w-full">
-                                  {media.mime_type.split('/')[1]?.toUpperCase() ?? 'FILE'}
+                                  {displayTitle}
                                 </p>
                               </div>
                             </div>
@@ -253,9 +266,15 @@ export function CreatorTabs({
                     <div className="mt-4 flex gap-3 justify-center">
                       <a
                         href="/dashboard/creator/listings/new"
-                        className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm"
+                        className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm"
                       >
                         Create Listing
+                      </a>
+                      <a
+                        href="/dashboard/portfolio/new"
+                        className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-white px-5 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
+                      >
+                        Add Portfolio Item
                       </a>
                     </div>
                   )}
@@ -364,15 +383,18 @@ export function CreatorTabs({
                           user ? (
                             <a
                               href="#custom-order-panel"
-                              onClick={() => setActiveTab('custom_order')}
+                              onClick={() => {
+                                setActiveTab('custom_order');
+                                setShowRequestForm(true);
+                              }}
                               className="flex-1 text-center py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition active:scale-95 whitespace-nowrap"
                             >
                               Request Custom Order
                             </a>
                           ) : (
                             <Link
-                              href={`/login?redirected_from=/u/${username || profile.slug}`}
-                              className="flex-1 text-center py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition active:scale-95 whitespace-nowrap"
+                              href={`/login?redirected_from=/u/${username || profile.slug}%23custom-order-panel`}
+                              className="flex-1 text-center py-2 px-3 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition active:scale-95 whitespace-nowrap"
                             >
                               Request Custom Order
                             </Link>
@@ -445,113 +467,232 @@ export function CreatorTabs({
         )}
 
         {/* CUSTOM ORDER PANEL */}
-        {activeTab === 'custom_order' && (
-          <div className="space-y-8 animate-fadeIn">
-            {profile.primary_category_id ? (
-              <div
-                id="custom-order-panel"
-                className="bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden transition-all duration-300 scroll-mt-6 hover:shadow-xl hover:shadow-indigo-100"
-              >
-                {/* Decorative Vector Graphic */}
-                <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none translate-x-12 translate-y-12">
-                  <svg width="240" height="240" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
+        {activeTab === 'custom_order' && (() => {
+          const hasCategory = !!profile.primary_category_id;
+          const acceptsCustomOrders = hasCategory && (profile.accepts_custom_orders !== false);
 
-                <div className="max-w-xl space-y-2 mb-6 text-left">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur text-[10px] font-extrabold uppercase tracking-widest text-indigo-200">
-                    ⚡ Customized Commission
-                  </span>
-                  <h2 className="text-2xl font-black tracking-tight">Request a Custom Order</h2>
-                  <p className="text-xs text-indigo-105 leading-relaxed">
-                    Need something fully personalized or designed to fit a specific budget? Describe your project requirements and receive a premium offer from {profile.display_name}.
-                  </p>
-                </div>
-
-                {isOwnProfile ? (
-                  <div className="bg-white/5 backdrop-blur-md rounded-2xl p-8 text-center border border-white/10">
-                    <p className="text-sm font-semibold mb-4 text-indigo-105">You are viewing your own custom order page.</p>
+          return (
+            <div className="space-y-8 animate-fadeIn" id="custom-order-panel">
+              {isOwnProfile ? (
+                // Owner View
+                !acceptsCustomOrders ? (
+                  // Owner, but custom orders disabled (either category is missing or accepts_custom_orders is false)
+                  <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-sm text-center space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto text-2xl">
+                      🚫
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900">You are not accepting custom orders right now.</h3>
+                    <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                      {!hasCategory 
+                        ? 'Select a primary category in your profile settings to enable custom orders.' 
+                        : 'Enable custom orders in your settings to allow buyers to request custom work.'}
+                    </p>
                     <Link
                       href={`/u/${username || profile.slug}/edit`}
-                      className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-black text-indigo-650 hover:bg-indigo-50 shadow-md transition-all active:scale-95 duration-150"
+                      className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 transition"
                     >
-                      Edit Custom Order Info
+                      {!hasCategory ? 'Select Category' : 'Enable Custom Orders'}
                     </Link>
                   </div>
-                ) : user ? (
-                  <div className="bg-white rounded-2xl p-6 text-gray-900 shadow-xl border border-white/10">
-                    <CustomOrderForm
-                      creatorId={profile.id}
-                      categoryId={profile.primary_category_id}
-                    />
-                  </div>
                 ) : (
-                  <div className="text-center py-8 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10">
-                    <p className="text-sm font-semibold mb-4 text-indigo-105">Please sign in to configure your custom requirements.</p>
-                    <a
-                      href={`/login?redirected_from=/creators/${profile.slug}#custom-order-panel`}
-                      className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-black text-indigo-650 hover:bg-indigo-50 shadow-md transition-all active:scale-95 duration-150"
-                    >
-                      Sign in to Request Order
-                    </a>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-16 bg-white rounded-xl border border-gray-100 shadow-sm">
-                <div className="w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
-                  ⚡
-                </div>
-                <h3 className="text-base font-bold text-gray-800 mb-1">
-                  {isOwnProfile ? 'Enable Custom Orders' : 'No custom orders available yet'}
-                </h3>
-                <p className="text-sm text-gray-405 max-w-sm mx-auto mt-1">
-                  {isOwnProfile
-                    ? 'Select a primary category in your profile settings to enable custom orders.'
-                    : `${profile.display_name} does not accept custom orders at this time.`}
-                </p>
-                {isOwnProfile && (
-                  <a
-                    href={`/u/${username || profile.slug}/edit`}
-                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm"
-                  >
-                    Select Category
-                  </a>
-                )}
-              </div>
-            )}
+                  // Owner and custom orders enabled
+                  <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-sm text-left space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg">
+                        ⚙️
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">Custom Order Settings</h3>
+                        <p className="text-xs text-gray-500">Tell buyers what type of custom work you accept.</p>
+                      </div>
+                    </div>
 
-            {/* Inquiry Form */}
-            {!isOwnProfile && (
-              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md text-left">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full blur-2xl pointer-events-none" />
-                <h2 className="text-lg font-black text-gray-900 tracking-tight mb-2">Send an Inquiry</h2>
-                <p className="text-xs text-gray-550 mb-6 leading-relaxed">
-                  Have a quick question about custom availability, work licensing, or delivery timelines? Write directly to the creator.
-                </p>
-                {user ? (
-                  <InquiryForm creatorId={profile.id} defaultInquiryType="general" />
-                ) : (
-                  <div className="bg-slate-50/50 rounded-2xl p-8 text-center border border-dashed border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-1">
-                      Have a project question?
-                    </p>
-                    <p className="text-xs text-gray-405 mb-5 max-w-sm mx-auto">
-                      Inquiries and messages are fully verified and safe. Authenticate now to begin talking.
-                    </p>
-                    <a
-                      href={`/login?redirected_from=/creators/${profile.slug}`}
-                      className="inline-flex items-center rounded-full bg-gray-900 px-6 py-2.5 text-xs font-black text-white hover:bg-gray-800 shadow transition duration-300 active:scale-95"
-                    >
-                      Sign in to Contact Creator
-                    </a>
+                    {/* Display Settings info if present */}
+                    {(profile.custom_order_description || profile.custom_order_starting_price || profile.custom_order_delivery_days) && (
+                      <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 text-sm text-gray-650 space-y-3">
+                        {profile.custom_order_description && (
+                          <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Your Custom Work Policy</p>
+                            <p className="mt-1 font-medium text-gray-700 whitespace-pre-line">{profile.custom_order_description}</p>
+                          </div>
+                        )}
+                        <div className="flex gap-6 flex-wrap pt-2 border-t border-gray-200/60">
+                          {profile.custom_order_starting_price !== null && (
+                            <div>
+                              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Starting Price</p>
+                              <p className="mt-0.5 font-bold text-gray-950">₹{Number(profile.custom_order_starting_price).toLocaleString('en-IN')}</p>
+                            </div>
+                          )}
+                          {profile.custom_order_delivery_days !== null && (
+                            <div>
+                              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Delivery Time</p>
+                              <p className="mt-0.5 font-bold text-gray-950">{profile.custom_order_delivery_days} Days</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                      <Link
+                        href={`/u/${username || profile.slug}/edit`}
+                        className="w-full sm:w-auto text-center px-5 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 shadow-sm transition"
+                      >
+                        Edit Custom Order Info
+                      </Link>
+                      <Link
+                        href="/dashboard/creator/custom-orders"
+                        className="w-full sm:w-auto text-center px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition"
+                      >
+                        View Custom Requests
+                      </Link>
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                )
+              ) : (
+                // Visitor View (authenticated or anonymous)
+                !acceptsCustomOrders ? (
+                  // Visitor, and custom orders disabled
+                  <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-sm text-center space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center mx-auto text-2xl">
+                      🚫
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900">This creator is not accepting custom orders right now.</h3>
+                    <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                      You can still browse their Portfolio or message them directly.
+                    </p>
+                    <button
+                      disabled
+                      className="inline-flex items-center justify-center rounded-xl bg-gray-100 px-6 py-2.5 text-xs font-bold text-gray-400 cursor-not-allowed border border-gray-200"
+                    >
+                      Request Custom Order
+                    </button>
+                  </div>
+                ) : (
+                  // Visitor, and custom orders enabled
+                  <div className="space-y-6">
+                    {showRequestForm && user ? (
+                      // Display CustomOrderForm directly if showRequestForm is true and logged in
+                      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-sm text-left space-y-5">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                          <div>
+                            <h3 className="text-lg font-black text-gray-900">Request a Custom Order</h3>
+                            <p className="text-xs text-gray-400">Describe your project requirements to get a custom quote.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowRequestForm(false)}
+                            className="text-xs font-bold text-gray-500 hover:text-indigo-650 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition"
+                          >
+                            ← Back
+                          </button>
+                        </div>
+                        <CustomOrderForm
+                          creatorId={profile.id}
+                          categoryId={profile.primary_category_id!}
+                        />
+                      </div>
+                    ) : (
+                      // Otherwise display the "Request a Custom Order" landing card
+                      <div className="bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-indigo-150/30 text-left">
+                        {/* Decorative Vector Graphic */}
+                        <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none translate-x-12 translate-y-12">
+                          <svg width="240" height="240" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+
+                        <div className="max-w-xl space-y-2 mb-6">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur text-[10px] font-extrabold uppercase tracking-widest text-indigo-200">
+                            ⚡ Customized Commission
+                          </span>
+                          <h2 className="text-2xl font-black tracking-tight">Request a Custom Order</h2>
+                          <p className="text-xs text-indigo-105 leading-relaxed">
+                            Describe what you need and get a custom quote from this creator. Personalized finishing, custom sizes, and custom timelines are supported.
+                          </p>
+                        </div>
+
+                        {/* Display Settings/starting budget/time if present */}
+                        {(profile.custom_order_description || profile.custom_order_starting_price || profile.custom_order_delivery_days) && (
+                          <div className="bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/10 text-xs text-indigo-100 space-y-3 mb-6 max-w-2xl">
+                            {profile.custom_order_description && (
+                              <div>
+                                <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">Custom Work Policy & Services</p>
+                                <p className="mt-1 font-medium whitespace-pre-line text-white">{profile.custom_order_description}</p>
+                              </div>
+                            )}
+                            <div className="flex gap-6 flex-wrap pt-2 border-t border-white/10">
+                              {profile.custom_order_starting_price !== null && (
+                                <div>
+                                  <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">Starting Budget</p>
+                                  <p className="mt-0.5 font-black text-white text-sm">₹{Number(profile.custom_order_starting_price).toLocaleString('en-IN')}</p>
+                                </div>
+                              )}
+                              {profile.custom_order_delivery_days !== null && (
+                                <div>
+                                  <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">Typical Delivery</p>
+                                  <p className="mt-0.5 font-black text-white text-sm">{profile.custom_order_delivery_days} Days</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex gap-3 items-center">
+                          {user ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowRequestForm(true)}
+                              className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-black text-indigo-650 hover:bg-indigo-50 shadow-md transition-all active:scale-95 duration-150"
+                            >
+                              Request Custom Order
+                            </button>
+                          ) : (
+                            <Link
+                              href={`/login?redirected_from=/u/${username || profile.slug}%23custom-order-panel`}
+                              className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 text-sm font-black text-indigo-650 hover:bg-indigo-50 shadow-md transition-all active:scale-95 duration-150"
+                            >
+                              Request Custom Order
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              )}
+
+              {/* Inquiry Form */}
+              {!isOwnProfile && (
+                <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md text-left">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full blur-2xl pointer-events-none" />
+                  <h2 className="text-lg font-black text-gray-900 tracking-tight mb-2">Send an Inquiry</h2>
+                  <p className="text-xs text-gray-550 mb-6 leading-relaxed">
+                    Have a quick question about custom availability, work licensing, or delivery timelines? Write directly to the creator.
+                  </p>
+                  {user ? (
+                    <InquiryForm creatorId={profile.id} defaultInquiryType="general" />
+                  ) : (
+                    <div className="bg-slate-50/50 rounded-2xl p-8 text-center border border-dashed border-gray-200">
+                      <p className="text-sm font-semibold text-gray-700 mb-1">
+                        Have a project question?
+                      </p>
+                      <p className="text-xs text-gray-405 mb-5 max-w-sm mx-auto">
+                        Inquiries and messages are fully verified and safe. Authenticate now to begin talking.
+                      </p>
+                      <a
+                        href={`/login?redirected_from=/creators/${profile.slug}`}
+                        className="inline-flex items-center rounded-full bg-gray-900 px-6 py-2.5 text-xs font-black text-white hover:bg-gray-800 shadow transition duration-300 active:scale-95"
+                      >
+                        Sign in to Contact Creator
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* REVIEWS PANEL */}
         {activeTab === 'reviews' && (
@@ -686,6 +827,39 @@ export function CreatorTabs({
                 </div>
 
                 <hr className="border-gray-100" />
+
+                {(() => {
+                  let title = '';
+                  let description = '';
+                  if (activeMedia.alt_text) {
+                    try {
+                      const parsed = JSON.parse(activeMedia.alt_text);
+                      if (parsed && typeof parsed === 'object') {
+                        title = parsed.title || '';
+                        description = parsed.description || '';
+                      }
+                    } catch (e) {
+                      title = activeMedia.alt_text;
+                    }
+                  }
+
+                  return (
+                    <>
+                      {title && (
+                        <div className="space-y-1 text-left">
+                          <p className="text-xs text-gray-400 uppercase font-extrabold tracking-wider">Title</p>
+                          <h4 className="text-sm font-bold text-gray-900 leading-snug">{title}</h4>
+                        </div>
+                      )}
+                      {description && (
+                        <div className="space-y-1 text-left">
+                          <p className="text-xs text-gray-400 uppercase font-extrabold tracking-wider">Description</p>
+                          <p className="text-xs text-gray-600 leading-relaxed font-semibold whitespace-pre-wrap">{description}</p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 <div className="space-y-1 text-left">
                   <p className="text-xs text-gray-400 uppercase font-extrabold tracking-wider">File Details</p>

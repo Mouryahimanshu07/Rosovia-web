@@ -126,3 +126,23 @@ export async function updateProfileByAuthUserId(
   return updated as Profile;
 }
 
+/**
+ * Lists public (non-deleted, active) profiles from the public_profiles view.
+ */
+export async function listPublicProfiles(
+  supabase: SupabaseClient,
+  params: { limit?: number; offset?: number } = {}
+): Promise<Profile[]> {
+  const limit = params.limit ?? 24;
+  const offset = params.offset ?? 0;
+
+  const { data, error } = await supabase
+    .from('public_profiles')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) throw new Error(`Failed to list public profiles: ${error.message}`);
+  return data as Profile[];
+}
+

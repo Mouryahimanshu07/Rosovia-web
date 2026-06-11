@@ -30,6 +30,10 @@ export interface CreatorProfile {
   headline: string | null;
   website_url: string | null;
   profile_theme: string | null;
+  accepts_custom_orders: boolean;
+  custom_order_description: string | null;
+  custom_order_starting_price: number | null;
+  custom_order_delivery_days: number | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

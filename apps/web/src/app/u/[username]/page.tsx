@@ -359,73 +359,7 @@ export default async function UserPublicProfilePage({ params }: Props) {
         </div>
       </div>
 
-      {/* ── AVAILABILITY BANNER SECTION ────────────────────────── */}
-      {isCreator && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 text-left">
-            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg relative shrink-0">
-              ⚡
-              <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full animate-pulse" />
-            </div>
-            <div>
-              <h4 className="text-xs sm:text-sm font-black text-gray-900">Available for custom work</h4>
-              <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">Need a custom quote? Let&apos;s talk about your requirements.</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
-            {isOwnProfile ? (
-              <>
-                <Link
-                  href={`/u/${baseProfile.username}/edit`}
-                  className="w-full sm:w-auto text-center px-4 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 shadow-sm transition active:scale-95 whitespace-nowrap"
-                >
-                  Edit availability
-                </Link>
-                <a
-                  href="/dashboard/creator/listings"
-                  className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-750 hover:bg-indigo-100 shadow-sm transition active:scale-95 whitespace-nowrap"
-                >
-                  Manage services
-                </a>
-              </>
-            ) : (
-              <>
-                {user ? (
-                  <a
-                    href="#custom-order-panel"
-                    className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition active:scale-95 whitespace-nowrap"
-                  >
-                    Request Custom Order
-                  </a>
-                ) : (
-                  <Link
-                    href={`/login?redirected_from=/u/${baseProfile.username}`}
-                    className="w-full sm:w-auto text-center px-4 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm transition active:scale-95 whitespace-nowrap"
-                  >
-                    Request Custom Order
-                  </Link>
-                )}
-                {user ? (
-                  <Link
-                    href={`/dashboard/messages?new_chat_with_user_id=${baseProfile.id}`}
-                    className="w-full sm:w-auto text-center px-4 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 shadow-sm transition active:scale-95 whitespace-nowrap"
-                  >
-                    Message Creator
-                  </Link>
-                ) : (
-                  <Link
-                    href={`/login?redirected_from=/u/${baseProfile.username}`}
-                    className="w-full sm:w-auto text-center px-4 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 shadow-sm transition active:scale-95 whitespace-nowrap"
-                  >
-                    Message Creator
-                  </Link>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* ── CREATOR TABS SECTION ─────────────────────────────── */}
       {creatorProfile && creatorTabsData && (

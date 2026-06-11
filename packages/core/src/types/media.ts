@@ -15,7 +15,8 @@ export type MediaUsage =
   | 'listing_media'
   | 'verification_document'
   | 'post_media'
-  | 'general';
+  | 'general'
+  | 'portfolio';
 
 export interface MediaAsset {
   id: string;

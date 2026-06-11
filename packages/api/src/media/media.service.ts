@@ -18,6 +18,7 @@ export {
   getMediaAssetById,
   listMediaByOwnerId,
   listCreatorPublicPortfolioMedia,
+  listCreatorPortfolioMedia,
   listMediaByListingId,
   updateMediaAsset,
 } from './media.repository';
@@ -66,6 +67,8 @@ export async function createSignedMediaUpload(
     storageKey = generateStorageKey({ scope: 'listing', listingId: input.listingId }, input.fileName);
   } else if (input.usage === 'post_media') {
     storageKey = generateStorageKey({ scope: 'profile', profileId: `${profile.id}/posts` }, input.fileName);
+  } else if (input.usage === 'portfolio') {
+    storageKey = generateStorageKey({ scope: 'profile', profileId: `${profile.id}/portfolio` }, input.fileName);
   } else {
     storageKey = generateStorageKey({ scope: 'profile', profileId: profile.id }, input.fileName);
   }
@@ -192,7 +195,8 @@ export async function saveUploadedMediaMetadata(
       !isPrivate &&
       (input.usage === 'profile_image' ||
         input.usage === 'listing_media' ||
-        input.usage === 'post_media')
+        input.usage === 'post_media' ||
+        input.usage === 'portfolio')
         ? 'approved'
         : isPrivate
         ? 'uploaded'

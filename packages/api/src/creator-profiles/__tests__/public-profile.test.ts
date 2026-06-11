@@ -13,6 +13,7 @@ describe('Public Creator Profile Queries', () => {
       eq: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
       is: vi.fn().mockReturnThis(),
+      like: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       range: vi.fn().mockReturnThis(),
     };
@@ -94,6 +95,7 @@ describe('Public Creator Profile Queries', () => {
       expect(mockSupabase.in).toHaveBeenCalledWith('status', ['approved', 'uploaded']);
       expect(mockSupabase.is).toHaveBeenCalledWith('deleted_at', null);
       expect(mockSupabase.is).toHaveBeenCalledWith('listing_id', null);
+      expect(mockSupabase.like).toHaveBeenCalledWith('storage_key', '%/profile_123/portfolio/%');
 
       expect(result).toHaveLength(1);
       expect(result[0]?.id).toBe('media_1');

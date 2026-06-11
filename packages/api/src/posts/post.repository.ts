@@ -55,8 +55,21 @@ export async function listPublicWorkFeedPosts(
     query = query.eq('post_type', params.postType);
   }
 
+  if (params.type === 'video') {
+    query = query.eq('post_type', 'short_video');
+  } else if (params.type === 'image') {
+    query = query.in('post_type', ['image', 'carousel', 'portfolio', 'listing_showcase']);
+  }
+
+  if (params.verified === true) {
+    query = query.eq('creator_profiles.is_verified', true);
+  }
+
   if (params.q) {
-    query = query.ilike('caption', `%${params.q}%`);
+    const term = `%${params.q.trim().replace(/[%_]/g, '\\$&')}%`;
+    query = query.or(
+      `caption.ilike.${term},creator_profiles.display_name.ilike.${term},listings.title.ilike.${term},creator_profiles.profiles.username.ilike.${term}`
+    );
   }
 
   if (params.category) {
@@ -84,6 +97,7 @@ export async function listPublicWorkFeedPosts(
     query = query
       .order('like_count', { ascending: false })
       .order('save_count', { ascending: false })
+      .order('comment_count', { ascending: false })
       .order('view_count', { ascending: false })
       .order('created_at', { ascending: false });
   } else {
@@ -378,6 +392,7 @@ function mapRowToPost(row: any): CreatorPostWithDetails {
     like_count: row.like_count,
     save_count: row.save_count,
     view_count: row.view_count,
+    comment_count: row.comment_count ?? 0,
     created_at: row.created_at,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
@@ -399,4 +414,203 @@ function mapRowToPost(row: any): CreatorPostWithDetails {
         }
       : null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Likes
+// ---------------------------------------------------------------------------
+
+export async function isPostLiked(
+  supabase: SupabaseClient,
+  profileId: string,
+  postId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('post_likes')
+    .select('id')
+    .eq('profile_id', profileId)
+    .eq('post_id', postId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to check if post is liked: ${error.message}`);
+  return !!data;
+}
+
+export async function likePost(
+  supabase: SupabaseClient,
+  profileId: string,
+  postId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('post_likes')
+    .insert({ profile_id: profileId, post_id: postId });
+
+  if (error) {
+    if (error.code === '23505') return; // Duplicate like is safe no-op
+    throw new Error(`Failed to like post: ${error.message}`);
+  }
+}
+
+export async function unlikePost(
+  supabase: SupabaseClient,
+  profileId: string,
+  postId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('post_likes')
+    .delete()
+    .eq('profile_id', profileId)
+    .eq('post_id', postId);
+
+  if (error) throw new Error(`Failed to unlike post: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Saves
+// ---------------------------------------------------------------------------
+
+export async function isPostSaved(
+  supabase: SupabaseClient,
+  profileId: string,
+  postId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('post_saves')
+    .select('id')
+    .eq('profile_id', profileId)
+    .eq('post_id', postId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to check if post is saved: ${error.message}`);
+  return !!data;
+}
+
+export async function savePost(
+  supabase: SupabaseClient,
+  profileId: string,
+  postId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('post_saves')
+    .insert({ profile_id: profileId, post_id: postId });
+
+  if (error) {
+    if (error.code === '23505') return; // Duplicate save is safe no-op
+    throw new Error(`Failed to save post: ${error.message}`);
+  }
+}
+
+export async function unsavePost(
+  supabase: SupabaseClient,
+  profileId: string,
+  postId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('post_saves')
+    .delete()
+    .eq('profile_id', profileId)
+    .eq('post_id', postId);
+
+  if (error) throw new Error(`Failed to unsave post: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Comments
+// ---------------------------------------------------------------------------
+
+export interface PostCommentWithProfile {
+  id: string;
+  post_id: string;
+  profile_id: string;
+  body: string;
+  created_at: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+export async function listPostComments(
+  supabase: SupabaseClient,
+  postId: string
+): Promise<PostCommentWithProfile[]> {
+  const { data, error } = await supabase
+    .from('post_comments')
+    .select(`
+      id,
+      post_id,
+      profile_id,
+      body,
+      created_at,
+      profiles!inner (
+        username,
+        full_name,
+        avatar_url
+      )
+    `)
+    .eq('post_id', postId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: true });
+
+  if (error) throw new Error(`Failed to list post comments: ${error.message}`);
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    post_id: row.post_id,
+    profile_id: row.profile_id,
+    body: row.body,
+    created_at: row.created_at,
+    username: row.profiles?.username ?? null,
+    display_name: row.profiles?.full_name ?? null,
+    avatar_url: row.profiles?.avatar_url ?? null,
+  }));
+}
+
+export async function addPostComment(
+  supabase: SupabaseClient,
+  profileId: string,
+  postId: string,
+  body: string
+): Promise<PostCommentWithProfile> {
+  const { data, error } = await supabase
+    .from('post_comments')
+    .insert({ profile_id: profileId, post_id: postId, body })
+    .select(`
+      id,
+      post_id,
+      profile_id,
+      body,
+      created_at,
+      profiles!inner (
+        username,
+        full_name,
+        avatar_url
+      )
+    `)
+    .single();
+
+  if (error) throw new Error(`Failed to add post comment: ${error.message}`);
+
+  const row = data as any;
+  return {
+    id: row.id,
+    post_id: row.post_id,
+    profile_id: row.profile_id,
+    body: row.body,
+    created_at: row.created_at,
+    username: row.profiles?.username ?? null,
+    display_name: row.profiles?.full_name ?? null,
+    avatar_url: row.profiles?.avatar_url ?? null,
+  };
+}
+
+export async function deletePostComment(
+  supabase: SupabaseClient,
+  commentId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('post_comments')
+    .delete()
+    .eq('id', commentId);
+
+  if (error) throw new Error(`Failed to delete post comment: ${error.message}`);
 }

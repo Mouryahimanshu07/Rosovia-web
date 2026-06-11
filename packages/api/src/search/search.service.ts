@@ -6,6 +6,7 @@ import type {
   PaginatedResult,
   ListingSearchParams,
   CreatorPostWithDetails,
+  Profile,
 } from '@rosovia/core';
 
 import {
@@ -20,11 +21,13 @@ import {
   listActiveCategories,
   getCategoryBySlug,
   getCategoryPageData,
+  searchPublicProfiles,
   type RankedSearchParams,
 } from './search.repository';
 import { listPublicListings } from '../listings/listing.repository';
 import { listPublicCreatorProfiles } from '../creator-profiles/creator-profile.repository';
 import { listPublicWorkFeedPosts } from '../posts/post.repository';
+import { listPublicProfiles } from '../profiles/profile.repository';
 
 // ---------------------------------------------------------------------------
 // getExplorePageData — extended with work feed
@@ -37,6 +40,7 @@ export async function getExplorePageData(
   categories: DbCategory[];
   listings: PaginatedResult<ListingWithDetails>;
   creators: CreatorProfileWithCategory[];
+  people: Profile[];
   workFeed: { data: CreatorPostWithDetails[]; hasNext: boolean };
   q: string;
 }> {
@@ -54,20 +58,27 @@ export async function getExplorePageData(
   const postTypeVal = Array.isArray(rawParams.postType) ? rawParams.postType[0] : rawParams.postType;
   const postType = postTypeVal || undefined;
 
-  const [categories, listings, creatorsRaw, workFeed] = await Promise.all([
-    listActiveCategories(supabase),
+  const [categories, listings, creatorsRaw, people, workFeed] = await Promise.all([
+    listActiveCategories(supabase, q ? { q } : {}),
     q
       ? searchApprovedListings(supabase, { q, page: 1 })
       : listPublicListings(supabase, { limit: 12 }).then((data) => ({
           data,
           meta: { page: 1, pageSize: 12, total: null, hasNext: false, hasPrev: false },
         })),
-    listPublicCreatorProfiles(supabase, { limit: 8 }),
+    q
+      ? searchPublicCreators(supabase, { q }).then((res) => res.data)
+      : listPublicCreatorProfiles(supabase, { limit: 12 }),
+    q
+      ? searchPublicProfiles(supabase, { q, limit: 12 }).then((res) => res.data)
+      : listPublicProfiles(supabase, { limit: 12 }),
     listPublicWorkFeedPosts(supabase, {
       page,
       sort: sort as any,
       category,
       postType: postType as any,
+      type: (rawParams.type as any) || undefined,
+      verified: rawParams.verified === 'true' || (rawParams.verified as any) === true || undefined,
       ...(q ? { q } : {}),
     }),
   ]);
@@ -76,6 +87,7 @@ export async function getExplorePageData(
     categories,
     listings,
     creators: creatorsRaw,
+    people,
     workFeed,
     q,
   };

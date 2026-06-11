@@ -133,14 +133,25 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
     expect(queryChain.order).toHaveBeenCalledWith('created_at', { ascending: false });
   });
 
-  it('sorts by popular by ordering by like, save, and view counters desc', async () => {
+  it('sorts by popular by ordering by like, save, comment, and view counters desc', async () => {
     await listPublicWorkFeedPosts(mockSupabase as SupabaseClient, {
       sort: 'popular',
     });
 
     expect(queryChain.order).toHaveBeenNthCalledWith(1, 'like_count', { ascending: false });
     expect(queryChain.order).toHaveBeenNthCalledWith(2, 'save_count', { ascending: false });
-    expect(queryChain.order).toHaveBeenNthCalledWith(3, 'view_count', { ascending: false });
-    expect(queryChain.order).toHaveBeenNthCalledWith(4, 'created_at', { ascending: false });
+    expect(queryChain.order).toHaveBeenNthCalledWith(3, 'comment_count', { ascending: false });
+    expect(queryChain.order).toHaveBeenNthCalledWith(4, 'view_count', { ascending: false });
+    expect(queryChain.order).toHaveBeenNthCalledWith(5, 'created_at', { ascending: false });
+  });
+
+  it('applies query q parameter to match against caption, display_name, listing title, and creator username', async () => {
+    await listPublicWorkFeedPosts(mockSupabase as SupabaseClient, {
+      q: 'handcrafted',
+    });
+
+    expect(queryChain.or).toHaveBeenCalledWith(
+      'caption.ilike.%handcrafted%,creator_profiles.display_name.ilike.%handcrafted%,listings.title.ilike.%handcrafted%,creator_profiles.profiles.username.ilike.%handcrafted%'
+    );
   });
 });

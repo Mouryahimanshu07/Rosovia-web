@@ -21,6 +21,16 @@ export const creatorProfileFormSchema = z.object({
   headline: z.string().max(100, 'Headline is too long').optional(),
   websiteUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   profileTheme: z.string().max(30).optional(),
+  acceptsCustomOrders: z.boolean().optional(),
+  customOrderDescription: z.string().max(1000, 'Description must be 1000 characters or less').optional().nullable(),
+  customOrderStartingPrice: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().nonnegative('Starting price must be 0 or more').nullable()
+  ).optional().nullable(),
+  customOrderDeliveryDays: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().int().positive('Delivery days must be a positive integer').nullable()
+  ).optional().nullable(),
 });
 
 /**
@@ -43,6 +53,16 @@ export const creatorProfileCreateSchema = z.object({
   headline: z.string().max(100).optional(),
   websiteUrl: z.string().url().optional(),
   profileTheme: z.string().max(30).optional(),
+  acceptsCustomOrders: z.boolean().optional(),
+  customOrderDescription: z.string().max(1000).optional().nullable(),
+  customOrderStartingPrice: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().nonnegative().nullable()
+  ).optional().nullable(),
+  customOrderDeliveryDays: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().int().positive().nullable()
+  ).optional().nullable(),
 });
 
 export const creatorProfileUpdateSchema = creatorProfileCreateSchema.partial();

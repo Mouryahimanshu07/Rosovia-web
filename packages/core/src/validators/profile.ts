@@ -19,6 +19,16 @@ export const profileFormSchema = z.object({
   primaryCategoryId: z.string().uuid('Please select a valid category').optional().nullable(),
   story: z.string().max(2000, 'Story must be 2000 characters or less').optional().nullable(),
   introVideoUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')).nullable(),
+  acceptsCustomOrders: z.boolean().optional(),
+  customOrderDescription: z.string().max(1000, 'Description must be 1000 characters or less').optional().nullable(),
+  customOrderStartingPrice: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().nonnegative('Starting price must be 0 or more').nullable()
+  ).optional().nullable(),
+  customOrderDeliveryDays: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().int().positive('Delivery days must be a positive integer').nullable()
+  ).optional().nullable(),
 });
 
 export const profileUpdateSchema = z.object({

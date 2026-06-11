@@ -243,7 +243,7 @@ describe('Reviews Service & Target Constraints', () => {
         created_at: '',
         updated_at: '',
         deleted_at: null,
-      });
+      } as any);
 
       vi.mocked(listCurrentCreatorReceivedReviews).mockResolvedValueOnce([]);
       const res = await listCreatorReviewsForCurrentUser(mockSupabase as SupabaseClient);

@@ -62,6 +62,10 @@ export async function updateProfileAction(
         profileImageUrl: input.avatarUrl ?? undefined,
         coverImageUrl: input.coverImageUrl ?? undefined,
         introVideoUrl: (input as any).introVideoUrl ?? undefined,
+        acceptsCustomOrders: input.acceptsCustomOrders,
+        customOrderDescription: input.customOrderDescription,
+        customOrderStartingPrice: input.customOrderStartingPrice,
+        customOrderDeliveryDays: input.customOrderDeliveryDays,
       };
 
       if (creatorProfile) {

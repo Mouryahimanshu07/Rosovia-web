@@ -22,6 +22,15 @@ import {
   listPostsForCreatorProfile,
   listPublicPostsForCreatorProfile,
   listPublicWorkFeedPosts,
+  isPostLiked,
+  likePost,
+  unlikePost,
+  isPostSaved,
+  savePost,
+  unsavePost,
+  listPostComments,
+  addPostComment,
+  deletePostComment,
 } from './post.repository';
 
 // ---------------------------------------------------------------------------
@@ -276,4 +285,137 @@ export async function adminModeratePost(
   }
 
   return updated as CreatorPost;
+}
+
+// ---------------------------------------------------------------------------
+// Likes Service Actions
+// ---------------------------------------------------------------------------
+
+export async function isPostLikedByUser(
+  supabase: SupabaseClient,
+  postId: string
+): Promise<boolean> {
+  try {
+    const profile = await resolveActiveProfile(supabase);
+    return await isPostLiked(supabase, profile.id, postId);
+  } catch {
+    return false;
+  }
+}
+
+export async function toggleLikePost(
+  supabase: SupabaseClient,
+  postId: string
+): Promise<{ liked: boolean }> {
+  const profile = await resolveActiveProfile(supabase);
+  const alreadyLiked = await isPostLiked(supabase, profile.id, postId);
+
+  if (alreadyLiked) {
+    await unlikePost(supabase, profile.id, postId);
+    return { liked: false };
+  } else {
+    await likePost(supabase, profile.id, postId);
+    return { liked: true };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Saves Service Actions
+// ---------------------------------------------------------------------------
+
+export async function isPostSavedByUser(
+  supabase: SupabaseClient,
+  postId: string
+): Promise<boolean> {
+  try {
+    const profile = await resolveActiveProfile(supabase);
+    return await isPostSaved(supabase, profile.id, postId);
+  } catch {
+    return false;
+  }
+}
+
+export async function toggleSavePost(
+  supabase: SupabaseClient,
+  postId: string
+): Promise<{ saved: boolean }> {
+  const profile = await resolveActiveProfile(supabase);
+  const alreadySaved = await isPostSaved(supabase, profile.id, postId);
+
+  if (alreadySaved) {
+    await unsavePost(supabase, profile.id, postId);
+    return { saved: false };
+  } else {
+    await savePost(supabase, profile.id, postId);
+    return { saved: true };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Comments Service Actions
+// ---------------------------------------------------------------------------
+
+export async function getPostComments(
+  supabase: SupabaseClient,
+  postId: string
+) {
+  return await listPostComments(supabase, postId);
+}
+
+export async function addCommentToPost(
+  supabase: SupabaseClient,
+  postId: string,
+  body: string
+) {
+  const profile = await resolveActiveProfile(supabase);
+  if (!body.trim()) {
+    throw new Error('Comment body cannot be empty');
+  }
+  return await addPostComment(supabase, profile.id, postId, body.trim());
+}
+
+export async function removeCommentFromPost(
+  supabase: SupabaseClient,
+  commentId: string
+): Promise<void> {
+  const profile = await resolveActiveProfile(supabase);
+
+  // Get the comment to check ownership
+  const { data: comment, error } = await supabase
+    .from('post_comments')
+    .select('profile_id, post_id')
+    .eq('id', commentId)
+    .single();
+
+  if (error || !comment) {
+    throw new Error('Comment not found');
+  }
+
+  // Check if comment owner
+  const isCommentOwner = comment.profile_id === profile.id;
+
+  // Check if post owner
+  let isPostOwner = false;
+  const { data: post } = await supabase
+    .from('creator_posts')
+    .select('creator_profile_id')
+    .eq('id', comment.post_id)
+    .single();
+
+  if (post) {
+    const { data: creator } = await supabase
+      .from('creator_profiles')
+      .select('user_id')
+      .eq('id', post.creator_profile_id)
+      .single();
+    if (creator && creator.user_id === profile.id) {
+      isPostOwner = true;
+    }
+  }
+
+  if (!isCommentOwner && !isPostOwner) {
+    throw new Error('You do not have permission to delete this comment');
+  }
+
+  await deletePostComment(supabase, commentId);
 }

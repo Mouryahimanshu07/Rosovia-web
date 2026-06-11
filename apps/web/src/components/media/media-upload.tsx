@@ -18,6 +18,7 @@ function getAllowedMimeTypes(usage: MediaUsage, accept?: string): string[] {
       return [...ALLOWED_IMAGE_MIME_TYPES];
     case 'listing_media':
     case 'post_media':
+    case 'portfolio':
       return [...ALLOWED_IMAGE_MIME_TYPES, ...ALLOWED_VIDEO_MIME_TYPES];
     case 'verification_document':
       return [...ALLOWED_DOCUMENT_MIME_TYPES];
@@ -45,7 +46,8 @@ function getMaxSizeBytes(usage: MediaUsage, maxSizeBytes?: number, accept?: stri
       if (accept && accept === 'image/*') return MAX_SIZE.listing_media_image;
       return MAX_SIZE.listing_media_video; // worst-case for mixed/video
     case 'post_media':
-      // Post images are limited to 10 MB; post videos/mixed get 50 MB
+    case 'portfolio':
+      // Post/Portfolio images are limited to 10 MB; post/portfolio videos/mixed get 50 MB
       if (accept && accept === 'image/*') return MAX_SIZE.listing_media_image;
       return MAX_SIZE.listing_media_video;
     case 'verification_document': return MAX_SIZE.verification_document;

@@ -150,6 +150,42 @@ describe('media validators', () => {
       expect(result.success).toBe(false);
     });
 
+    it('accepts valid portfolio image upload request', () => {
+      const result = signedUploadRequestSchema.safeParse({
+        fileName: 'portfolio.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1024,
+        mediaType: 'image',
+        usage: 'portfolio',
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts valid portfolio video upload request', () => {
+      const result = signedUploadRequestSchema.safeParse({
+        fileName: 'portfolio.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: 10 * 1024 * 1024,
+        mediaType: 'video',
+        usage: 'portfolio',
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects portfolio video larger than limit', () => {
+      const result = signedUploadRequestSchema.safeParse({
+        fileName: 'huge.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: MAX_SIZE.listing_media_video + 1,
+        mediaType: 'video',
+        usage: 'portfolio',
+      });
+
+      expect(result.success).toBe(false);
+    });
+
     it('rejects unsupported MIME type', () => {
       const result = signedUploadRequestSchema.safeParse({
         fileName: 'script.exe',

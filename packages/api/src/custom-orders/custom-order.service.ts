@@ -74,7 +74,7 @@ export async function createCurrentUserCustomOrder(
   // Verify target creator exists and is active
   const { data: creatorData, error: creatorError } = await supabase
     .from('creator_profiles')
-    .select('id, user_id, deleted_at')
+    .select('id, user_id, deleted_at, accepts_custom_orders')
     .eq('id', validatedInput.creatorId)
     .is('deleted_at', null)
     .single();
@@ -83,7 +83,11 @@ export async function createCurrentUserCustomOrder(
     throw new Error('Creator not found or unavailable');
   }
 
-  const creatorRecord = creatorData as { id: string; user_id: string };
+  const creatorRecord = creatorData as { id: string; user_id: string; accepts_custom_orders: boolean };
+
+  if (creatorRecord.accepts_custom_orders === false) {
+    throw new Error('This creator is not currently accepting custom orders');
+  }
 
   // Verify creator's base profile is active
   const { data: creatorBaseProfile, error: baseProfileError } = await supabase

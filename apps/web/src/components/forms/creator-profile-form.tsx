@@ -64,7 +64,7 @@ export function CreatorProfileForm({ mode, categories, existingProfile }: Creato
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreatorProfileFormInput>({
-    resolver: zodResolver(creatorProfileFormSchema),
+    resolver: zodResolver(creatorProfileFormSchema) as any,
     defaultValues: defaults,
   });
 

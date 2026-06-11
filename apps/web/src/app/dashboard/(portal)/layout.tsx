@@ -5,6 +5,7 @@ import {
   ListTodo, 
   ShoppingBag, 
   Settings as SettingsIcon,
+  Palette,
 } from 'lucide-react';
 
 import { createWebServerClient } from '~/lib/supabase/server';
@@ -31,7 +32,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const dashboardPath = getDashboardRedirectPath(profile.role);
   const ordersPath = isCreator ? '/dashboard/creator/orders' : '/dashboard/buyer/orders';
 
-  // Sidebar navigation — Dashboard | My Listings | Orders | Settings
+  // Sidebar navigation — Dashboard | My Listings | My Portfolio | Orders | Settings
   // (Edit Profile and My Posts are in /u/[username], Messages is in top navbar)
   const sidebarLinks = [
     {
@@ -45,6 +46,12 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
       href: '/dashboard/creator/listings',
       icon: ListTodo,
       visible: isCreator || isAdmin
+    },
+    {
+      label: 'My Portfolio',
+      href: '/dashboard/portfolio',
+      icon: Palette,
+      visible: isCreator
     },
     {
       label: 'Orders',

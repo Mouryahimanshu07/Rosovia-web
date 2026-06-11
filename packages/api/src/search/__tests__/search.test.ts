@@ -17,6 +17,7 @@ import {
 } from '../search.service';
 import { listPublicListings } from '../../listings/listing.repository';
 import { listPublicCreatorProfiles } from '../../creator-profiles/creator-profile.repository';
+import { listPublicProfiles } from '../../profiles/profile.repository';
 
 vi.mock('../../listings/listing.repository', () => ({
   listPublicListings: vi.fn(),
@@ -25,6 +26,10 @@ vi.mock('../../listings/listing.repository', () => ({
 vi.mock('../../creator-profiles/creator-profile.repository', () => ({
   listPublicCreatorProfiles: vi.fn(),
   mapProfileRowToCreatorProfile: (row: any) => row,
+}));
+
+vi.mock('../../profiles/profile.repository', () => ({
+  listPublicProfiles: vi.fn(),
 }));
 
 const CATEGORY_ID = 'e3d7bb0d-bbfb-48bb-a084-3c66f578df9e';
@@ -173,8 +178,7 @@ describe('Search & Discovery Service & Repository', () => {
     it('lists public creators with status active', async () => {
       await searchPublicCreators(mockSupabase as SupabaseClient, {});
 
-      expect(mockSupabase.from).toHaveBeenCalledWith('profiles');
-      expect(mockIs).toHaveBeenCalledWith('deleted_at', null);
+      expect(mockSupabase.from).toHaveBeenCalledWith('public_profiles');
     });
 
     it('applies sorting params including verified_first', async () => {
@@ -184,20 +188,107 @@ describe('Search & Discovery Service & Repository', () => {
 
       expect(mockOrder).toHaveBeenCalledWith('creator_profiles(is_verified)', { ascending: false, nullsFirst: false });
     });
+
+    it('filters creators with q parameter using OR query', async () => {
+      await searchPublicCreators(mockSupabase as SupabaseClient, {
+        q: 'potter',
+      });
+
+      expect(mockOr).toHaveBeenCalledWith(
+        'full_name.ilike.%potter%,username.ilike.%potter%,bio.ilike.%potter%,city.ilike.%potter%,state.ilike.%potter%'
+      );
+    });
+
+    it('correctly filters creators when creator_profiles is an array or a single object', async () => {
+      const mockCreators = [
+        {
+          id: '1',
+          full_name: 'Creator One',
+          role: 'creator',
+          creator_profiles: [
+            {
+              id: 'cp-1',
+              is_verified: true,
+              primary_category_id: 'cat-1',
+            }
+          ]
+        },
+        {
+          id: '2',
+          full_name: 'Creator Two',
+          role: 'creator',
+          creator_profiles: {
+            id: 'cp-2',
+            is_verified: false,
+            primary_category_id: 'cat-2',
+          }
+        }
+      ];
+
+      mockRange.mockResolvedValueOnce({
+        data: mockCreators,
+        error: null,
+      });
+
+      const verifiedResult = await searchPublicCreators(mockSupabase as SupabaseClient, {
+        verifiedOnly: true,
+      });
+      expect(verifiedResult.data).toHaveLength(1);
+      expect(verifiedResult.data[0]!.id).toBe('1');
+
+      mockRange.mockResolvedValueOnce({
+        data: mockCreators,
+        error: null,
+      });
+
+      const categoryResult = await searchPublicCreators(mockSupabase as SupabaseClient, {
+        category: 'cat-2',
+      });
+      expect(categoryResult.data).toHaveLength(1);
+      expect(categoryResult.data[0]!.id).toBe('2');
+    });
+  });
+
+  describe('searchPublicProfiles', () => {
+    it('queries public_profiles view and applies fuzzy search and range pagination', async () => {
+      const { searchPublicProfiles } = await import('../search.repository');
+      await searchPublicProfiles(mockSupabase as SupabaseClient, { q: 'John Doe', page: 2, limit: 10 });
+
+      expect(mockSupabase.from).toHaveBeenCalledWith('public_profiles');
+      expect(mockOr).toHaveBeenCalledWith(
+        'display_name.ilike.%John Doe%,username.ilike.%John Doe%,bio.ilike.%John Doe%,city.ilike.%John Doe%,state.ilike.%John Doe%'
+      );
+      expect(mockRange).toHaveBeenCalledWith(10, 20);
+    });
   });
 
   describe('search service methods mapping', () => {
     it('getExplorePageData calls listing and creator fetches in parallel', async () => {
       vi.mocked(listPublicListings).mockResolvedValueOnce([]);
       vi.mocked(listPublicCreatorProfiles).mockResolvedValueOnce([]);
+      vi.mocked(listPublicProfiles).mockResolvedValueOnce([]);
 
       const res = await getExplorePageData(mockSupabase as SupabaseClient, {});
 
       expect(res.categories).toBeDefined();
       expect(res.listings).toBeDefined();
       expect(res.creators).toBeDefined();
+      expect(res.people).toBeDefined();
       expect(listPublicListings).toHaveBeenCalled();
       expect(listPublicCreatorProfiles).toHaveBeenCalled();
+      expect(listPublicProfiles).toHaveBeenCalled();
+    });
+
+    it('getExplorePageData applies search query parameter q when provided', async () => {
+      vi.mocked(listPublicListings).mockResolvedValueOnce([]);
+      vi.mocked(listPublicCreatorProfiles).mockResolvedValueOnce([]);
+      vi.mocked(listPublicProfiles).mockResolvedValueOnce([]);
+
+      const res = await getExplorePageData(mockSupabase as SupabaseClient, { q: 'paint' });
+
+      expect(res.q).toBe('paint');
+      expect(mockSupabase.from).toHaveBeenCalledWith('categories');
+      expect(mockOr).toHaveBeenCalledWith('name.ilike.%paint%,description.ilike.%paint%,slug.ilike.%paint%');
     });
 
     it('getTrendingListings calls searchListingsRanked with trending parameters', async () => {

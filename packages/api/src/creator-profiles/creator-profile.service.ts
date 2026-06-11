@@ -97,6 +97,10 @@ export async function createCurrentUserCreatorProfile(
     headline: input.headline ?? null,
     website_url: input.websiteUrl ?? null,
     profile_theme: input.profileTheme ?? 'default',
+    accepts_custom_orders: input.acceptsCustomOrders ?? true,
+    custom_order_description: input.customOrderDescription ?? null,
+    custom_order_starting_price: input.customOrderStartingPrice ?? null,
+    custom_order_delivery_days: input.customOrderDeliveryDays ?? null,
   });
 }
 
@@ -126,6 +130,10 @@ export async function updateCurrentUserCreatorProfile(
   if (input.headline !== undefined) safeData.headline = input.headline ?? null;
   if (input.websiteUrl !== undefined) safeData.website_url = input.websiteUrl ?? null;
   if (input.profileTheme !== undefined) safeData.profile_theme = input.profileTheme ?? null;
+  if (input.acceptsCustomOrders !== undefined) safeData.accepts_custom_orders = input.acceptsCustomOrders;
+  if (input.customOrderDescription !== undefined) safeData.custom_order_description = input.customOrderDescription ?? null;
+  if (input.customOrderStartingPrice !== undefined) safeData.custom_order_starting_price = input.customOrderStartingPrice ?? null;
+  if (input.customOrderDeliveryDays !== undefined) safeData.custom_order_delivery_days = input.customOrderDeliveryDays ?? null;
 
   return updateCreatorProfile(supabase, creatorProfileId, safeData);
 }
