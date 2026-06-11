@@ -15,7 +15,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@rosovi
 function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectedFrom = searchParams.get('redirected_from');
+  const redirectedFrom = searchParams.get('redirected_from') || searchParams.get('redirectTo');
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {

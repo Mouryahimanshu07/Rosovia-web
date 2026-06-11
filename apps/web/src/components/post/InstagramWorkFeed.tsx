@@ -68,7 +68,21 @@ export function InstagramWorkFeed({
   const viewerAuthUserId = currentUserProfile?.auth_user_id;
 
   useEffect(() => {
-    setPosts(initialPosts);
+    setPosts((prev) => {
+      const oldIds = prev.map((p) => p.id).join(',');
+      const newIds = initialPosts.map((p) => p.id).join(',');
+      if (oldIds === newIds) {
+        return prev.map((oldPost) => {
+          const newPost = initialPosts.find((p) => p.id === oldPost.id);
+          if (!newPost) return oldPost;
+          return {
+            ...oldPost,
+            ...newPost,
+          };
+        });
+      }
+      return initialPosts;
+    });
     setPage(1);
     setHasNext(initialPosts.length >= 10);
   }, [initialPosts]);
@@ -160,6 +174,11 @@ export function InstagramWorkFeed({
             viewerProfileId={viewerProfileId}
             viewerAuthUserId={viewerAuthUserId}
             router={router}
+            onPostUpdate={(updatedFields) => {
+              setPosts((prev) =>
+                prev.map((p) => (p.id === updatedFields.id ? { ...p, ...updatedFields } : p))
+              );
+            }}
           />
         ))}
       </div>
@@ -194,13 +213,15 @@ interface InstagramPostCardProps {
   viewerProfileId?: string;
   viewerAuthUserId?: string;
   router: any;
+  onPostUpdate?: (updatedPost: Partial<CreatorPostWithDetails> & { id: string }) => void;
 }
 
 function InstagramPostCard({
   post,
   viewerProfileId,
   viewerAuthUserId,
-  router
+  router,
+  onPostUpdate
 }: InstagramPostCardProps) {
   const [liked, setLiked] = useState(!!post.likedByViewer);
   const [likeCount, setLikeCount] = useState(post.like_count);
@@ -287,7 +308,7 @@ function InstagramPostCard({
 
   const handleAuthRedirect = () => {
     const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-    router.push(`/login?redirected_from=${returnUrl}`);
+    router.push(`/login?redirectTo=${returnUrl}`);
   };
 
   // Like Toggle
@@ -299,20 +320,58 @@ function InstagramPostCard({
     if (likeLoading) return;
     setLikeLoading(true);
 
+    const oldLiked = liked;
+    const oldLikeCount = likeCount;
     const newLiked = !liked;
+    const newLikeCount = newLiked ? oldLikeCount + 1 : Math.max(0, oldLikeCount - 1);
+
+    // 1. Optimistic update
     setLiked(newLiked);
-    setLikeCount((c) => (newLiked ? c + 1 : Math.max(0, c - 1)));
+    setLikeCount(newLikeCount);
+    if (onPostUpdate) {
+      onPostUpdate({
+        id: post.id,
+        likedByViewer: newLiked,
+        like_count: newLikeCount,
+      });
+    }
 
     try {
       const res = await toggleLikePostAction(post.id);
-      if (!res.success) {
-        // revert UI state on failure
-        setLiked(!newLiked);
-        setLikeCount((c) => (!newLiked ? c + 1 : Math.max(0, c - 1)));
+      if (res.success && res.data) {
+        // 2. Set backend values
+        setLiked(res.data.likedByViewer);
+        setLikeCount(res.data.likeCount);
+        if (onPostUpdate) {
+          onPostUpdate({
+            id: post.id,
+            likedByViewer: res.data.likedByViewer,
+            like_count: res.data.likeCount,
+          });
+        }
+      } else {
+        // 3. Rollback on failure
+        setLiked(oldLiked);
+        setLikeCount(oldLikeCount);
+        if (onPostUpdate) {
+          onPostUpdate({
+            id: post.id,
+            likedByViewer: oldLiked,
+            like_count: oldLikeCount,
+          });
+        }
       }
     } catch {
-      setLiked(!newLiked);
-      setLikeCount((c) => (!newLiked ? c + 1 : Math.max(0, c - 1)));
+      // 3. Rollback on error
+      setLiked(oldLiked);
+      setLikeCount(oldLikeCount);
+      if (onPostUpdate) {
+        onPostUpdate({
+          id: post.id,
+          likedByViewer: oldLiked,
+          like_count: oldLikeCount,
+        });
+      }
     } finally {
       setLikeLoading(false);
     }
@@ -327,19 +386,58 @@ function InstagramPostCard({
     if (saveLoading) return;
     setSaveLoading(true);
 
+    const oldSaved = saved;
+    const oldSaveCount = saveCount;
     const newSaved = !saved;
+    const newSaveCount = newSaved ? oldSaveCount + 1 : Math.max(0, oldSaveCount - 1);
+
+    // 1. Optimistic update
     setSaved(newSaved);
-    setSaveCount((c) => (newSaved ? c + 1 : Math.max(0, c - 1)));
+    setSaveCount(newSaveCount);
+    if (onPostUpdate) {
+      onPostUpdate({
+        id: post.id,
+        savedByViewer: newSaved,
+        save_count: newSaveCount,
+      });
+    }
 
     try {
       const res = await toggleSavePostAction(post.id);
-      if (!res.success) {
-        setSaved(!newSaved);
-        setSaveCount((c) => (!newSaved ? c + 1 : Math.max(0, c - 1)));
+      if (res.success && res.data) {
+        // 2. Set backend values
+        setSaved(res.data.savedByViewer);
+        setSaveCount(res.data.saveCount);
+        if (onPostUpdate) {
+          onPostUpdate({
+            id: post.id,
+            savedByViewer: res.data.savedByViewer,
+            save_count: res.data.saveCount,
+          });
+        }
+      } else {
+        // 3. Rollback on failure
+        setSaved(oldSaved);
+        setSaveCount(oldSaveCount);
+        if (onPostUpdate) {
+          onPostUpdate({
+            id: post.id,
+            savedByViewer: oldSaved,
+            save_count: oldSaveCount,
+          });
+        }
       }
     } catch {
-      setSaved(!newSaved);
-      setSaveCount((c) => (!newSaved ? c + 1 : Math.max(0, c - 1)));
+      // 3. Rollback on error
+      setSaved(oldSaved);
+      setSaveCount(oldSaveCount);
+      if (onPostUpdate) {
+        onPostUpdate({
+          id: post.id,
+          savedByViewer: oldSaved,
+          save_count: oldSaveCount,
+        });
+      }
     } finally {
       setSaveLoading(false);
     }
@@ -610,7 +708,8 @@ function InstagramPostCard({
           {/* Like */}
           <button
             onClick={handleLike}
-            className="group flex items-center gap-1.5 text-slate-600 hover:text-rose-600 transition"
+            disabled={likeLoading}
+            className="group flex items-center gap-1.5 text-slate-600 hover:text-rose-600 transition disabled:opacity-60"
             title="Like Post"
           >
             <Heart
@@ -650,7 +749,8 @@ function InstagramPostCard({
         {/* Save */}
         <button
           onClick={handleSave}
-          className="flex items-center gap-1.5 text-slate-600 hover:text-amber-500 transition"
+          disabled={saveLoading}
+          className="flex items-center gap-1.5 text-slate-600 hover:text-amber-500 transition disabled:opacity-60"
           title="Save Post"
         >
           <Bookmark className={`h-6 w-6 ${saved ? 'text-amber-500 fill-amber-500' : ''}`} />

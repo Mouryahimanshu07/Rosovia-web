@@ -106,9 +106,33 @@ export async function listPublicWorkFeedPosts(
       }
     }
 
-    query = query.or(
-      `listings.category_id.eq.${categoryId},creator_profiles.primary_category_id.eq.${categoryId}`
-    );
+    // Get all creator profiles in this category
+    const { data: creatorsResult } = await supabase
+      .from('creator_profiles')
+      .select('id')
+      .eq('primary_category_id', categoryId);
+    const creatorProfileIds = (creatorsResult ?? []).map((cp: any) => cp.id);
+
+    // Get all listings in this category
+    const { data: listingsResult } = await supabase
+      .from('listings')
+      .select('id')
+      .eq('category_id', categoryId);
+    const listingIds = (listingsResult ?? []).map((l: any) => l.id);
+
+    const filterParts: string[] = [];
+    if (creatorProfileIds.length > 0) {
+      filterParts.push(`creator_profile_id.in.(${creatorProfileIds.join(',')})`);
+    }
+    if (listingIds.length > 0) {
+      filterParts.push(`listing_id.in.(${listingIds.join(',')})`);
+    }
+
+    if (filterParts.length > 0) {
+      query = query.or(filterParts.join(','));
+    } else {
+      return { data: [], hasNext: false };
+    }
   }
 
   if (params.sort === 'popular') {

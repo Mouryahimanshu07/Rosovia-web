@@ -60,6 +60,28 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
             }),
           };
         }
+        if (table === 'creator_profiles') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockImplementation(() => {
+              return Promise.resolve({
+                data: [{ id: 'creator-uuid-123' }],
+                error: null,
+              });
+            }),
+          };
+        }
+        if (table === 'listings') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockImplementation(() => {
+              return Promise.resolve({
+                data: [{ id: 'listing-uuid-123' }],
+                error: null,
+              });
+            }),
+          };
+        }
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
@@ -95,7 +117,7 @@ describe('Public Work Feed Filtering and Sorting Tests', () => {
 
     expect(mockSupabase.from).toHaveBeenCalledWith('categories');
     expect(queryChain.or).toHaveBeenCalledWith(
-      'listings.category_id.eq.cat-uuid-123,creator_profiles.primary_category_id.eq.cat-uuid-123'
+      'creator_profile_id.in.(creator-uuid-123),listing_id.in.(listing-uuid-123)'
     );
   });
 

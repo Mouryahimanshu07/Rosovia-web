@@ -306,7 +306,7 @@ export async function isPostLikedByUser(
 export async function toggleLikePost(
   supabase: SupabaseClient,
   postId: string
-): Promise<{ liked: boolean }> {
+): Promise<{ likedByViewer: boolean; likeCount: number }> {
   const profile = await resolveActiveProfile(supabase);
 
   const post = await getPostById(supabase, postId);
@@ -318,11 +318,15 @@ export async function toggleLikePost(
 
   if (alreadyLiked) {
     await unlikePost(supabase, profile.id, postId);
-    return { liked: false };
   } else {
     await likePost(supabase, profile.id, postId);
-    return { liked: true };
   }
+
+  const updatedPost = await getPostById(supabase, postId);
+  return {
+    likedByViewer: !alreadyLiked,
+    likeCount: updatedPost?.like_count ?? 0,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -344,7 +348,7 @@ export async function isPostSavedByUser(
 export async function toggleSavePost(
   supabase: SupabaseClient,
   postId: string
-): Promise<{ saved: boolean }> {
+): Promise<{ savedByViewer: boolean; saveCount: number }> {
   const profile = await resolveActiveProfile(supabase);
 
   const post = await getPostById(supabase, postId);
@@ -356,11 +360,15 @@ export async function toggleSavePost(
 
   if (alreadySaved) {
     await unsavePost(supabase, profile.id, postId);
-    return { saved: false };
   } else {
     await savePost(supabase, profile.id, postId);
-    return { saved: true };
   }
+
+  const updatedPost = await getPostById(supabase, postId);
+  return {
+    savedByViewer: !alreadySaved,
+    saveCount: updatedPost?.save_count ?? 0,
+  };
 }
 
 // ---------------------------------------------------------------------------

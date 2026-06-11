@@ -123,7 +123,7 @@ export async function deletePostAction(postId: string): Promise<ActionResult> {
 
 export async function toggleLikePostAction(
   postId: string
-): Promise<ActionResult<{ liked: boolean }>> {
+): Promise<ActionResult<{ likedByViewer: boolean; likeCount: number }>> {
   try {
     const supabase = createWebServerClient();
     const result = await toggleLikePost(supabase, postId);
@@ -152,7 +152,7 @@ export async function isPostLikedByUserAction(
 
 export async function toggleSavePostAction(
   postId: string
-): Promise<ActionResult<{ saved: boolean }>> {
+): Promise<ActionResult<{ savedByViewer: boolean; saveCount: number }>> {
   try {
     const supabase = createWebServerClient();
     const result = await toggleSavePost(supabase, postId);
