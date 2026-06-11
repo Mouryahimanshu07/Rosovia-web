@@ -208,8 +208,17 @@ export async function followProfile(
       console.error('Failed to notify profile of new follower:', e);
     }
   } catch (err: any) {
-    if (!err.message?.includes('23505')) {
-      throw err;
+    if (err.message?.includes('23505')) {
+      // Duplicate follow (race condition), ignore error
+    } else {
+      console.error('Database/RLS error in followProfile:', err);
+      // Suppress raw error, return failure status
+      try {
+        const stats = await getProfileFollowStats(supabase, input.followingProfileId);
+        return { success: false, isFollowing: false, followerCount: stats.followersCount };
+      } catch (_) {
+        return { success: false, isFollowing: false, followerCount: 0 };
+      }
     }
   }
 
@@ -235,7 +244,17 @@ export async function unfollowProfile(
     return { success: true, isFollowing: false, followerCount: stats.followersCount };
   }
 
-  await deleteProfileFollow(supabase, profile.id, input.followingProfileId);
+  try {
+    await deleteProfileFollow(supabase, profile.id, input.followingProfileId);
+  } catch (err: any) {
+    console.error('Database/RLS error in unfollowProfile:', err);
+    try {
+      const stats = await getProfileFollowStats(supabase, input.followingProfileId);
+      return { success: false, isFollowing: true, followerCount: stats.followersCount };
+    } catch (_) {
+      return { success: false, isFollowing: true, followerCount: 0 };
+    }
+  }
   const stats = await getProfileFollowStats(supabase, input.followingProfileId);
   return { success: true, isFollowing: false, followerCount: stats.followersCount };
 }

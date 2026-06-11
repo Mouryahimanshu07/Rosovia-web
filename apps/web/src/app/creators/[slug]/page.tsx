@@ -11,14 +11,14 @@ import {
   listCreatorPublicPortfolioMedia,
   isCreatorSavedForUser,
   listCollectionsForPublicProfile,
-  isCurrentUserFollowing,
+  isCurrentUserFollowingProfile,
   listPublicPostsForCreatorProfile,
 } from '@rosovia/api';
 import { SaveButton } from '~/components/saved/save-button';
 import { VerificationBadge } from '~/components/creator/verification-badge';
 import { RatingSummary } from '~/components/creator/rating-summary';
 import { CreatorTabs } from '~/components/creator/creator-tabs';
-import { FollowButton } from '~/components/follow/FollowButton';
+import { ProfileFollowButton } from '~/components/follow/profile-follow-button';
 import { MessageCircle, Edit3, PlusSquare, LayoutList } from 'lucide-react';
 import Link from 'next/link';
 
@@ -54,7 +54,7 @@ export default async function CreatorPublicProfilePage({ params }: Props) {
 
   const [initialSaved, initialFollowing] = await Promise.all([
     user ? isCreatorSavedForUser(supabase, profile.id) : Promise.resolve(false),
-    user ? isCurrentUserFollowing(supabase, profile.id) : Promise.resolve(false),
+    user ? isCurrentUserFollowingProfile(supabase, profile.user_id) : Promise.resolve(false),
   ]);
 
   // Is current user this creator? Used to swap Follow/Message for Edit Profile
@@ -238,8 +238,9 @@ export default async function CreatorPublicProfilePage({ params }: Props) {
             ) : (
               /* Visitor: Follow + Message + Custom Order */
               <>
-                <FollowButton
-                  creatorProfileId={profile.id}
+                <ProfileFollowButton
+                  followingProfileId={profile.user_id}
+                  username={profile.slug}
                   initialFollowing={initialFollowing}
                 />
 

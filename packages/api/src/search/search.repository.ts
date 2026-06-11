@@ -14,6 +14,25 @@ import type {
 
 const PAGE_SIZE = 12;
 
+async function resolveCategoryId(supabase: SupabaseClient, category: string | undefined): Promise<string | null | 'NOT_FOUND'> {
+  if (!category) return null;
+  const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/i.test(category);
+  if (isUuid) return category;
+
+  try {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('slug', category)
+      .maybeSingle();
+    
+    if (error || !data) return 'NOT_FOUND';
+    return data.id;
+  } catch {
+    return 'NOT_FOUND';
+  }
+}
+
 // Internal extension of ListingSearchParams for the ranked RPC.
 // buyerCity/buyerState are passed by the service layer from session context;
 // they are NOT exposed as URL query params.
@@ -97,14 +116,26 @@ export async function searchApprovedListings(
   supabase: SupabaseClient,
   params: ListingSearchParams
 ): Promise<PaginatedResult<ListingWithDetails>> {
+  let resolvedCategory: string | null = null;
+  if (params.category) {
+    const res = await resolveCategoryId(supabase, params.category);
+    if (res === 'NOT_FOUND') {
+      return {
+        data: [],
+        meta: buildPaginationMeta(params.page ?? 1, PAGE_SIZE, 0)
+      };
+    }
+    resolvedCategory = res;
+  }
+
   // Delegate relevance + trending sorts to the ranked RPC — richer scoring
   const sortValue = params.sort as string | undefined;
   if (sortValue === 'relevance' || sortValue === 'trending') {
-    return searchListingsRanked(supabase, params);
+    return searchListingsRanked(supabase, { ...params, category: resolvedCategory ?? undefined });
   }
   // When a query is present, also use the ranked RPC for relevance scoring
   if (params.q && params.q.trim().length > 0) {
-    return searchListingsRanked(supabase, { ...params, sort: 'relevance' as ListingSearchParams['sort'] });
+    return searchListingsRanked(supabase, { ...params, sort: 'relevance' as ListingSearchParams['sort'], category: resolvedCategory ?? undefined });
   }
 
   const page = params.page ?? 1;
@@ -123,8 +154,8 @@ export async function searchApprovedListings(
     .is('creator_profiles.profiles.deleted_at', null);
 
   // Apply filters
-  if (params.category) {
-    dataQuery = dataQuery.eq('category_id', params.category);
+  if (resolvedCategory) {
+    dataQuery = dataQuery.eq('category_id', resolvedCategory);
   }
   if (params.listingType) {
     dataQuery = dataQuery.eq('listing_type', params.listingType);
@@ -210,9 +241,27 @@ export async function searchListingsRanked(
 ): Promise<PaginatedResult<ListingWithDetails>> {
   const page = params.page ?? 1;
 
+  let resolvedCategory: string | null = null;
+  if (params.category) {
+    const res = await resolveCategoryId(supabase, params.category);
+    if (res === 'NOT_FOUND') {
+      return {
+        data: [],
+        meta: {
+          page,
+          pageSize: PAGE_SIZE,
+          total: null,
+          hasNext: false,
+          hasPrev: page > 1,
+        },
+      };
+    }
+    resolvedCategory = res;
+  }
+
   const { data, error } = await supabase.rpc('search_listings_ranked', {
     p_query:         params.q?.trim() || null,
-    p_category:      params.category ?? null,
+    p_category:      resolvedCategory,
     p_listing_type:  params.listingType ?? null,
     p_min_price:     params.minPrice ?? null,
     p_max_price:     params.maxPrice ?? null,
@@ -267,6 +316,18 @@ async function searchListingsFallback(
   supabase: SupabaseClient,
   params: ListingSearchParams
 ): Promise<PaginatedResult<ListingWithDetails>> {
+  let resolvedCategory: string | null = null;
+  if (params.category) {
+    const res = await resolveCategoryId(supabase, params.category);
+    if (res === 'NOT_FOUND') {
+      return {
+        data: [],
+        meta: buildPaginationMeta(params.page ?? 1, PAGE_SIZE, 0)
+      };
+    }
+    resolvedCategory = res;
+  }
+
   const page = params.page ?? 1;
   const offset = (page - 1) * PAGE_SIZE;
   const fetchLimit = PAGE_SIZE + 1;
@@ -286,8 +347,8 @@ async function searchListingsFallback(
       `title.ilike.${term},description.ilike.${term},city.ilike.${term},state.ilike.${term}`
     );
   }
-  if (params.category) {
-    dataQuery = dataQuery.eq('category_id', params.category);
+  if (resolvedCategory) {
+    dataQuery = dataQuery.eq('category_id', resolvedCategory);
   }
   if (params.minPrice !== undefined) dataQuery = dataQuery.gte('price', params.minPrice);
   if (params.maxPrice !== undefined) dataQuery = dataQuery.lte('price', params.maxPrice);
@@ -323,6 +384,18 @@ export async function searchPublicCreators(
   supabase: SupabaseClient,
   params: CreatorSearchParams
 ): Promise<PaginatedResult<CreatorProfileWithCategory>> {
+  let resolvedCategory: string | null = null;
+  if (params.category) {
+    const res = await resolveCategoryId(supabase, params.category);
+    if (res === 'NOT_FOUND') {
+      return {
+        data: [],
+        meta: buildPaginationMeta(params.page ?? 1, PAGE_SIZE, 0)
+      };
+    }
+    resolvedCategory = res;
+  }
+
   const page = params.page ?? 1;
   const offset = (page - 1) * PAGE_SIZE;
   // Fetch one extra row to detect hasNext without an expensive COUNT(*)
@@ -356,6 +429,7 @@ export async function searchPublicCreators(
         headline,
         website_url,
         profile_theme,
+        primary_category_id,
         categories ( name, slug )
       )
     `)
@@ -368,8 +442,8 @@ export async function searchPublicCreators(
       `full_name.ilike.${term},username.ilike.${term},bio.ilike.${term},city.ilike.${term},state.ilike.${term}`
     );
   }
-  if (params.category) {
-    dataQuery = dataQuery.eq('creator_profiles.primary_category_id', params.category);
+  if (resolvedCategory) {
+    dataQuery = dataQuery.eq('creator_profiles.primary_category_id', resolvedCategory);
   }
   if (params.city) {
     dataQuery = dataQuery.ilike('city', `%${params.city.trim()}%`);
@@ -409,13 +483,13 @@ export async function searchPublicCreators(
     const cp = Array.isArray(cpRaw) ? cpRaw[0] : cpRaw;
 
     if (!cp) {
-      if (params.category || params.verifiedOnly) {
+      if (resolvedCategory || params.verifiedOnly) {
         return false;
       }
       return true;
     }
 
-    if (params.category && cp.primary_category_id !== params.category) {
+    if (resolvedCategory && cp.primary_category_id !== resolvedCategory) {
       return false;
     }
     if (params.verifiedOnly && !cp.is_verified) {

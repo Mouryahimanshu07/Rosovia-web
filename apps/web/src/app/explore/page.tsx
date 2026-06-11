@@ -36,6 +36,8 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const activeTab = searchParams.tab ?? 'work';
   const page = searchParams.page ? parseInt(searchParams.page) : 1;
 
+  const category = searchParams.category;
+
   // Dynamically fetch products/services listings depending on the active tab
   let products = null;
   let services = null;
@@ -43,12 +45,14 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   if (activeTab === 'products') {
     products = await searchApprovedListings(supabase, {
       q,
+      category,
       listingType: 'product',
       page,
     });
   } else if (activeTab === 'services') {
     services = await searchApprovedListings(supabase, {
       q,
+      category,
       listingType: 'service',
       page,
     });
@@ -134,9 +138,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               { key: 'services', label: '🛠️ Services' },
               { key: 'categories', label: '📂 Categories' },
             ].map(({ key, label }) => {
-              const href = q
-                ? `/explore?q=${encodeURIComponent(q)}&tab=${key}`
-                : `/explore?tab=${key}`;
+              let href = `/explore?tab=${key}`;
+              if (q) href += `&q=${encodeURIComponent(q)}`;
+              if (category) href += `&category=${encodeURIComponent(category)}`;
               const isActive = activeTab === key;
               return (
                 <Link
@@ -269,7 +273,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               {products.meta.hasNext && (
                 <div className="flex justify-center mt-8">
                   <Link
-                    href={`/explore?tab=products&page=${page + 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+                    href={`/explore?tab=products&page=${page + 1}${q ? `&q=${encodeURIComponent(q)}` : ''}${category ? `&category=${encodeURIComponent(category)}` : ''}`}
                     className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 hover:border-indigo-300 hover:text-indigo-700 transition-all shadow-sm"
                   >
                     Load more products →
@@ -312,7 +316,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               {services.meta.hasNext && (
                 <div className="flex justify-center mt-8">
                   <Link
-                    href={`/explore?tab=services&page=${page + 1}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+                    href={`/explore?tab=services&page=${page + 1}${q ? `&q=${encodeURIComponent(q)}` : ''}${category ? `&category=${encodeURIComponent(category)}` : ''}`}
                     className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 hover:border-indigo-300 hover:text-indigo-700 transition-all shadow-sm"
                   >
                     Load more services →

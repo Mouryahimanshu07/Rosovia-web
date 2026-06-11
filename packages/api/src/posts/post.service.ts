@@ -308,6 +308,12 @@ export async function toggleLikePost(
   postId: string
 ): Promise<{ liked: boolean }> {
   const profile = await resolveActiveProfile(supabase);
+
+  const post = await getPostById(supabase, postId);
+  if (!post || post.deleted_at || post.visibility !== 'public' || post.moderation_status !== 'approved') {
+    throw new Error('Post not found or unavailable');
+  }
+
   const alreadyLiked = await isPostLiked(supabase, profile.id, postId);
 
   if (alreadyLiked) {
@@ -340,6 +346,12 @@ export async function toggleSavePost(
   postId: string
 ): Promise<{ saved: boolean }> {
   const profile = await resolveActiveProfile(supabase);
+
+  const post = await getPostById(supabase, postId);
+  if (!post || post.deleted_at || post.visibility !== 'public' || post.moderation_status !== 'approved') {
+    throw new Error('Post not found or unavailable');
+  }
+
   const alreadySaved = await isPostSaved(supabase, profile.id, postId);
 
   if (alreadySaved) {
@@ -371,6 +383,15 @@ export async function addCommentToPost(
   if (!body.trim()) {
     throw new Error('Comment body cannot be empty');
   }
+  if (body.trim().length > 500) {
+    throw new Error('Comment cannot exceed 500 characters');
+  }
+
+  const post = await getPostById(supabase, postId);
+  if (!post || post.deleted_at || post.visibility !== 'public' || post.moderation_status !== 'approved') {
+    throw new Error('Post not found or unavailable');
+  }
+
   return await addPostComment(supabase, profile.id, postId, body.trim());
 }
 

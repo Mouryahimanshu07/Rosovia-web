@@ -46,6 +46,7 @@ export interface CreatorPostMediaWithUrl extends CreatorPostMedia {
 
 /** Post with creator info and media for feed/profile display */
 export interface CreatorPostWithDetails extends CreatorPost {
+  creator_user_id: string | null;
   creator_display_name: string | null;
   creator_slug: string | null;
   creator_profile_username: string | null;
@@ -62,6 +63,8 @@ export interface CreatorPostWithDetails extends CreatorPost {
     currency: string;
   } | null;
   moderation_note?: string | null;
+  likedByViewer?: boolean;
+  savedByViewer?: boolean;
 }
 
 // ---------------------------------------------------------------------------

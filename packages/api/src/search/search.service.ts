@@ -59,15 +59,15 @@ export async function getExplorePageData(
   const postType = postTypeVal || undefined;
 
   const [categories, listings, creatorsRaw, people, workFeed] = await Promise.all([
-    listActiveCategories(supabase, q ? { q } : {}),
-    q
-      ? searchApprovedListings(supabase, { q, page: 1 })
+    listActiveCategories(supabase, {}),
+    (q || category)
+      ? searchApprovedListings(supabase, { q, category, page: 1 })
       : listPublicListings(supabase, { limit: 12 }).then((data) => ({
           data,
           meta: { page: 1, pageSize: 12, total: null, hasNext: false, hasPrev: false },
         })),
-    q
-      ? searchPublicCreators(supabase, { q }).then((res) => res.data)
+    (q || category)
+      ? searchPublicCreators(supabase, { q, category }).then((res) => res.data)
       : listPublicCreatorProfiles(supabase, { limit: 12 }),
     q
       ? searchPublicProfiles(supabase, { q, limit: 12 }).then((res) => res.data)

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Plus, Clock, CheckCircle2, XCircle, EyeOff, LayoutGrid } from 'lucide-react';
 import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile, listCreatorOwnPosts, getProfileByUsername, listPublicPostsForCreatorProfile, isCurrentUserFollowing } from '@rosovia/api';
+import { getCurrentProfile, listCreatorOwnPosts, getProfileByUsername, listPublicPostsForCreatorProfile, isCurrentUserFollowingProfile } from '@rosovia/api';
 import { CreatorPostGrid } from '~/components/post/CreatorPostGrid';
 import type { CreatorPostWithDetails } from '@rosovia/core';
 
@@ -58,7 +58,7 @@ export default async function UserPostsPage({ params }: Props) {
 
     if (creatorProfile) {
       const isFollowing = loggedInProfile
-        ? await isCurrentUserFollowing(supabase, creatorProfile.id)
+        ? await isCurrentUserFollowingProfile(supabase, targetProfile.id)
         : false;
 
       posts = await listPublicPostsForCreatorProfile(supabase, creatorProfile.id, {

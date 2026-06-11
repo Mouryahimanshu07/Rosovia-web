@@ -185,8 +185,8 @@ describe('Post Engagement and Custom Filters Repository Tests', () => {
       expect(queryChain.eq).toHaveBeenCalledWith('post_id', 'post-1');
       expect(queryChain.eq).toHaveBeenCalledWith('status', 'active');
       expect(res).toHaveLength(1);
-      expect(res[0].body).toBe('Amazing!');
-      expect(res[0].username).toBe('jane');
+      expect(res[0]!.body).toBe('Amazing!');
+      expect(res[0]!.username).toBe('jane');
     });
 
     it('inserts comments into post_comments and returns the detailed comment', async () => {

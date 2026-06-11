@@ -65,7 +65,24 @@ describe('Search & Discovery Service & Repository', () => {
 
     // Final promise-resolving methods
     mockRange = vi.fn().mockResolvedValue({ data: [], error: null });
-    mockSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    
+    mockSingle = vi.fn().mockImplementation(async () => {
+      const eqCalls = mockEq.mock.calls;
+      const slugCall = eqCalls.find((c: any) => c[0] === 'slug');
+      if (slugCall) {
+        return { data: { id: slugCall[1], slug: slugCall[1], is_active: true }, error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    const mockMaybeSingle = vi.fn().mockImplementation(async () => {
+      const eqCalls = mockEq.mock.calls;
+      const slugCall = eqCalls.find((c: any) => c[0] === 'slug');
+      if (slugCall) {
+        return { data: { id: slugCall[1], slug: slugCall[1], is_active: true }, error: null };
+      }
+      return { data: null, error: null };
+    });
 
     const queryChain = {
       select: mockSelect,
@@ -79,6 +96,7 @@ describe('Search & Discovery Service & Repository', () => {
       lte: mockLte,
       or: mockOr,
       single: mockSingle,
+      maybeSingle: mockMaybeSingle,
     };
 
     mockSupabase = {
@@ -288,7 +306,9 @@ describe('Search & Discovery Service & Repository', () => {
 
       expect(res.q).toBe('paint');
       expect(mockSupabase.from).toHaveBeenCalledWith('categories');
-      expect(mockOr).toHaveBeenCalledWith('name.ilike.%paint%,description.ilike.%paint%,slug.ilike.%paint%');
+      expect(mockOr).toHaveBeenCalledWith(
+        'display_name.ilike.%paint%,username.ilike.%paint%,bio.ilike.%paint%,city.ilike.%paint%,state.ilike.%paint%'
+      );
     });
 
     it('getTrendingListings calls searchListingsRanked with trending parameters', async () => {

@@ -60,14 +60,23 @@ export async function unfollowCreatorAction(
 export async function followProfileAction(
   followingProfileId: string,
   username: string
-): Promise<ActionResult> {
+): Promise<ActionResult<{ isFollowing: boolean; followerCount: number }>> {
   try {
     const supabase = createWebServerClient();
-    await followProfile(supabase, { followingProfileId });
+    const result = await followProfile(supabase, { followingProfileId });
     revalidatePath(`/u/${username}`);
     revalidatePath(`/u/${username}/followers`);
     revalidatePath(`/u/${username}/following`);
-    return { success: true };
+    if (!result.success) {
+      return { success: false, error: 'Database or permission error occurred' };
+    }
+    return {
+      success: true,
+      data: {
+        isFollowing: result.isFollowing,
+        followerCount: result.followerCount ?? 0,
+      },
+    };
   } catch (err) {
     captureAppError(err, { module: 'follows', action: 'followProfile' });
     return {
@@ -84,14 +93,23 @@ export async function followProfileAction(
 export async function unfollowProfileAction(
   followingProfileId: string,
   username: string
-): Promise<ActionResult> {
+): Promise<ActionResult<{ isFollowing: boolean; followerCount: number }>> {
   try {
     const supabase = createWebServerClient();
-    await unfollowProfile(supabase, { followingProfileId });
+    const result = await unfollowProfile(supabase, { followingProfileId });
     revalidatePath(`/u/${username}`);
     revalidatePath(`/u/${username}/followers`);
     revalidatePath(`/u/${username}/following`);
-    return { success: true };
+    if (!result.success) {
+      return { success: false, error: 'Database or permission error occurred' };
+    }
+    return {
+      success: true,
+      data: {
+        isFollowing: result.isFollowing,
+        followerCount: result.followerCount ?? 0,
+      },
+    };
   } catch (err) {
     captureAppError(err, { module: 'follows', action: 'unfollowProfile' });
     return {

@@ -8,6 +8,21 @@ import { getDatabaseClients } from '@rosovia/integrations';
 
 const PAGE_SIZE = 12;
 
+async function getViewerProfileId(supabase: SupabaseClient): Promise<string | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
+    return profile?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public feed: approved, public, non-deleted posts only
 // ---------------------------------------------------------------------------
@@ -16,6 +31,7 @@ export async function listPublicWorkFeedPosts(
   supabase: SupabaseClient,
   params: FeedParams = {}
 ): Promise<{ data: CreatorPostWithDetails[]; hasNext: boolean }> {
+  const viewerProfileId = await getViewerProfileId(supabase);
   const page = params.page ?? 1;
   const offset = (page - 1) * PAGE_SIZE;
 
@@ -42,7 +58,9 @@ export async function listPublicWorkFeedPosts(
         sort_order,
         media_assets ( id, public_url, mime_type, media_type, thumbnail_url )
       ),
-      listings ( id, title, slug, price, currency, category_id )
+      listings ( id, title, slug, price, currency, category_id ),
+      post_likes ( profile_id ),
+      post_saves ( profile_id )
     `)
     .eq('visibility', 'public')
     .eq('moderation_status', 'approved')
@@ -74,7 +92,7 @@ export async function listPublicWorkFeedPosts(
 
   if (params.category) {
     let categoryId = params.category;
-    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/i.test(params.category);
+    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/i.test(params.category);
     if (!isUuid) {
       const { data: cat } = await supabase
         .from('categories')
@@ -114,7 +132,7 @@ export async function listPublicWorkFeedPosts(
   const slice = rows.slice(0, PAGE_SIZE);
 
   return {
-    data: slice.map(mapRowToPost),
+    data: slice.map((row) => mapRowToPost(row, viewerProfileId)),
     hasNext,
   };
 }
@@ -128,6 +146,7 @@ export async function listPostsForCreatorProfile(
   creatorProfileId: string,
   params: { page?: number; visibility?: string; postType?: string } = {}
 ): Promise<{ data: CreatorPostWithDetails[]; hasNext: boolean }> {
+  const viewerProfileId = await getViewerProfileId(supabase);
   const page = params.page ?? 1;
   const offset = (page - 1) * PAGE_SIZE;
 
@@ -143,7 +162,9 @@ export async function listPostsForCreatorProfile(
         id, post_id, media_asset_id, sort_order,
         media_assets ( id, public_url, mime_type, media_type, thumbnail_url )
       ),
-      listings ( id, title, slug, price, currency )
+      listings ( id, title, slug, price, currency ),
+      post_likes ( profile_id ),
+      post_saves ( profile_id )
     `)
     .eq('creator_profile_id', creatorProfileId)
     .is('deleted_at', null)
@@ -191,7 +212,7 @@ export async function listPostsForCreatorProfile(
   }
 
   const mappedPosts = slice.map((row) => {
-    const post = mapRowToPost(row);
+    const post = mapRowToPost(row, viewerProfileId);
     post.moderation_note = latestNoteByPostId[row.id] ?? null;
     return post;
   });
@@ -212,6 +233,7 @@ export async function listPublicPostsForCreatorProfile(
   creatorProfileId: string,
   viewerContext?: { isFollowing?: boolean; isSelf?: boolean }
 ): Promise<CreatorPostWithDetails[]> {
+  const viewerProfileId = await getViewerProfileId(supabase);
   const allowedVisibilities = ['public'];
   if (viewerContext?.isSelf || viewerContext?.isFollowing) {
     allowedVisibilities.push('followers');
@@ -232,7 +254,9 @@ export async function listPublicPostsForCreatorProfile(
         id, post_id, media_asset_id, sort_order,
         media_assets ( id, public_url, mime_type, media_type, thumbnail_url )
       ),
-      listings ( id, title, slug, price, currency )
+      listings ( id, title, slug, price, currency ),
+      post_likes ( profile_id ),
+      post_saves ( profile_id )
     `)
     .eq('creator_profile_id', creatorProfileId)
     .in('visibility', allowedVisibilities)
@@ -243,7 +267,7 @@ export async function listPublicPostsForCreatorProfile(
 
   if (error) throw new Error(`Failed to fetch public posts: ${error.message}`);
 
-  return ((data ?? []) as any[]).map(mapRowToPost);
+  return ((data ?? []) as any[]).map((row) => mapRowToPost(row, viewerProfileId));
 }
 
 // ---------------------------------------------------------------------------
@@ -364,7 +388,7 @@ export async function adminUpdatePostModeration(
 // Internal mapper
 // ---------------------------------------------------------------------------
 
-function mapRowToPost(row: any): CreatorPostWithDetails {
+function mapRowToPost(row: any, viewerProfileId?: string | null): CreatorPostWithDetails {
   const cp = row.creator_profiles;
   const media = (row.creator_post_media ?? []).map((m: any) => ({
     id: m.id,
@@ -381,6 +405,14 @@ function mapRowToPost(row: any): CreatorPostWithDetails {
   // Sort media by sort_order
   media.sort((a: any, b: any) => a.sort_order - b.sort_order);
 
+  const likedByViewer = viewerProfileId
+    ? (row.post_likes ?? []).some((l: any) => l.profile_id === viewerProfileId)
+    : false;
+
+  const savedByViewer = viewerProfileId
+    ? (row.post_saves ?? []).some((s: any) => s.profile_id === viewerProfileId)
+    : false;
+
   return {
     id: row.id,
     creator_profile_id: row.creator_profile_id,
@@ -396,6 +428,7 @@ function mapRowToPost(row: any): CreatorPostWithDetails {
     created_at: row.created_at,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
+    creator_user_id: cp?.user_id ?? null,
     creator_display_name: cp?.display_name ?? null,
     creator_slug: cp?.slug ?? null,
     creator_profile_username: cp?.profiles?.username ?? null,
@@ -413,6 +446,8 @@ function mapRowToPost(row: any): CreatorPostWithDetails {
           currency: row.listings.currency,
         }
       : null,
+    likedByViewer,
+    savedByViewer,
   };
 }
 

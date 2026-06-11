@@ -29,7 +29,7 @@ import {
   getPostCommentsAction,
   fetchMoreWorkPostsAction
 } from '~/app/actions/posts';
-import { followCreatorAction, unfollowCreatorAction } from '~/app/actions/follows';
+import { followProfileAction, unfollowProfileAction } from '~/app/actions/follows';
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -202,12 +202,14 @@ function InstagramPostCard({
   viewerAuthUserId,
   router
 }: InstagramPostCardProps) {
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(!!post.likedByViewer);
   const [likeCount, setLikeCount] = useState(post.like_count);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(!!post.savedByViewer);
   const [saveCount, setSaveCount] = useState(post.save_count);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
 
   // Comments state
   const [showComments, setShowComments] = useState(false);
@@ -224,7 +226,7 @@ function InstagramPostCard({
   // Share indicator
   const [shareCopied, setShareCopied] = useState(false);
 
-  const isOwner = viewerProfileId === post.creator_profile_id;
+  const isOwner = viewerProfileId === post.creator_user_id;
   const isAnonymous = !viewerProfileId;
 
   // Creator profile link
@@ -232,41 +234,31 @@ function InstagramPostCard({
     ? `/u/${post.creator_profile_username}`
     : `/creators/${post.creator_slug}`;
 
+  // Sync state with props
+  useEffect(() => {
+    setLiked(!!post.likedByViewer);
+    setLikeCount(post.like_count);
+    setSaved(!!post.savedByViewer);
+    setSaveCount(post.save_count);
+  }, [post.likedByViewer, post.like_count, post.savedByViewer, post.save_count]);
+
   // Fetch relationship state
   useEffect(() => {
     if (!isAnonymous && post.id) {
-      // Fetch initial like state
-      const checkLikeSave = async () => {
-        try {
-          const { isPostLikedByUserAction, isPostSavedByUserAction } = await import('~/app/actions/posts');
-          const [likeRes, saveRes] = await Promise.all([
-            isPostLikedByUserAction(post.id),
-            isPostSavedByUserAction(post.id)
-          ]);
-          if (likeRes.success) setLiked(!!likeRes.data);
-          if (saveRes.success) setSaved(!!saveRes.data);
-        } catch (e) {
-          console.error(e);
-        }
-      };
-      checkLikeSave();
-
-      // Check if following creator
+      // Check if following creator profile
       const checkFollowing = async () => {
+        if (!post.creator_user_id) return;
         try {
-          // Since we are inside client component, we will fetch following state using a safe action or API helper
-          // Let's use the profiles table follow status or trigger it on mount
-          const { data: followRow } = await getFollowRowClient(post.creator_profile_id);
+          const { data: followRow } = await getFollowRowClient(post.creator_user_id);
           setIsFollowing(!!followRow);
         } catch {}
       };
       checkFollowing();
     }
-  }, [post.id, isAnonymous, post.creator_profile_id]);
+  }, [post.id, isAnonymous, post.creator_user_id]);
 
   // Client side fetch follow row helper
-  const getFollowRowClient = async (creatorId: string) => {
-    // Quick helper to fetch if current user is following this creator via supabase client
+  const getFollowRowClient = async (targetProfileId: string) => {
     try {
       const { createSupabaseBrowserClient } = await import('@rosovia/integrations/browser');
       const supabase = createSupabaseBrowserClient();
@@ -283,10 +275,10 @@ function InstagramPostCard({
       if (!profile) return { data: null };
 
       return await supabase
-        .from('creator_follows')
+        .from('profile_follows')
         .select('*')
         .eq('follower_profile_id', profile.id)
-        .eq('creator_profile_id', creatorId)
+        .eq('following_profile_id', targetProfileId)
         .maybeSingle();
     } catch {
       return { data: null };
@@ -295,7 +287,7 @@ function InstagramPostCard({
 
   const handleAuthRedirect = () => {
     const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-    router.push(`/login?returnTo=${returnUrl}`);
+    router.push(`/login?redirected_from=${returnUrl}`);
   };
 
   // Like Toggle
@@ -304,6 +296,9 @@ function InstagramPostCard({
       handleAuthRedirect();
       return;
     }
+    if (likeLoading) return;
+    setLikeLoading(true);
+
     const newLiked = !liked;
     setLiked(newLiked);
     setLikeCount((c) => (newLiked ? c + 1 : Math.max(0, c - 1)));
@@ -318,6 +313,8 @@ function InstagramPostCard({
     } catch {
       setLiked(!newLiked);
       setLikeCount((c) => (!newLiked ? c + 1 : Math.max(0, c - 1)));
+    } finally {
+      setLikeLoading(false);
     }
   };
 
@@ -327,6 +324,9 @@ function InstagramPostCard({
       handleAuthRedirect();
       return;
     }
+    if (saveLoading) return;
+    setSaveLoading(true);
+
     const newSaved = !saved;
     setSaved(newSaved);
     setSaveCount((c) => (newSaved ? c + 1 : Math.max(0, c - 1)));
@@ -340,6 +340,8 @@ function InstagramPostCard({
     } catch {
       setSaved(!newSaved);
       setSaveCount((c) => (!newSaved ? c + 1 : Math.max(0, c - 1)));
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -349,14 +351,23 @@ function InstagramPostCard({
       handleAuthRedirect();
       return;
     }
+    if (!post.creator_user_id || !post.creator_profile_username) return;
     setFollowLoading(true);
     try {
       if (isFollowing) {
-        const res = await unfollowCreatorAction(post.creator_profile_id);
-        if (res.success) setIsFollowing(false);
+        const res = await unfollowProfileAction(post.creator_user_id, post.creator_profile_username);
+        if (res.success && res.data) {
+          setIsFollowing(res.data.isFollowing);
+        } else if (res.success) {
+          setIsFollowing(false);
+        }
       } else {
-        const res = await followCreatorAction(post.creator_profile_id);
-        if (res.success) setIsFollowing(true);
+        const res = await followProfileAction(post.creator_user_id, post.creator_profile_username);
+        if (res.success && res.data) {
+          setIsFollowing(res.data.isFollowing);
+        } else if (res.success) {
+          setIsFollowing(true);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -393,15 +404,22 @@ function InstagramPostCard({
       handleAuthRedirect();
       return;
     }
-    if (!newCommentBody.trim() || commentSubmitting) return;
+    const trimmedBody = newCommentBody.trim();
+    if (!trimmedBody || commentSubmitting) return;
+    if (trimmedBody.length > 500) {
+      alert('Comment must be 500 characters or less');
+      return;
+    }
 
     setCommentSubmitting(true);
     try {
-      const res = await addCommentAction(post.id, newCommentBody);
-      if (res.success && res.data) {
-        setComments((prev) => [...prev, res.data]);
-        setCommentsCount((c) => c + 1);
-        setNewCommentBody('');
+      const res = await addCommentAction(post.id, trimmedBody);
+      if (res.success) {
+        if (res.data) {
+          setComments((prev) => [...prev, res.data]);
+          setCommentsCount((c) => c + 1);
+          setNewCommentBody('');
+        }
       } else {
         alert(res.error || 'Failed to submit comment');
       }
@@ -428,13 +446,27 @@ function InstagramPostCard({
     }
   };
 
-  // Copy URL Share
+  // Share Action
   const handleShare = () => {
-    const shareUrl = `${window.location.origin}/u/${post.creator_profile_username}/posts`;
-    navigator.clipboard.writeText(shareUrl).then(() => {
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
-    });
+    const shareUrl = `${window.location.origin}/u/${post.creator_profile_username}/posts#post-${post.id}`;
+    const shareData = {
+      title: `${post.creator_display_name || 'Rosovia Creator'} on Rosovia`,
+      text: post.caption || 'Check out this amazing work on Rosovia!',
+      url: shareUrl,
+    };
+
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      navigator.share(shareData).catch((err) => {
+        console.error('Error sharing:', err);
+      });
+    } else {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2000);
+      }).catch((err) => {
+        console.error('Failed to copy link: ', err);
+      });
+    }
   };
 
   // Media render
@@ -442,7 +474,7 @@ function InstagramPostCard({
   const isVideo = firstMedia?.media_type === 'video' || firstMedia?.mime_type?.startsWith('video/');
 
   return (
-    <article className="w-full bg-white rounded-3xl border border-slate-100 shadow-md overflow-hidden flex flex-col transition hover:shadow-lg">
+    <article id={`post-${post.id}`} className="w-full bg-white rounded-3xl border border-slate-100 shadow-md overflow-hidden flex flex-col transition hover:shadow-lg">
       
       {/* Post Header */}
       <div className="flex items-center justify-between px-5 py-4">
@@ -656,8 +688,24 @@ function InstagramPostCard({
         </div>
       </div>
 
-      {/* CTA Footer Row (View Profile, Message, Custom Order) - Hidden for Owner */}
-      {!isOwner && (
+      {/* CTA Footer Row (View Profile, Message, Custom Order) or Owner Controls */}
+      {isOwner ? (
+        <div className="px-5 py-3.5 border-t border-slate-50 bg-slate-50/45 flex flex-wrap gap-2.5 mt-auto">
+          <Link
+            href={creatorProfileUrl}
+            className="flex-1 min-w-[100px] py-2 rounded-xl border border-slate-200 bg-white hover:border-slate-350 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            View Profile
+          </Link>
+          <Link
+            href="/dashboard/creator/posts"
+            className="flex-1 min-w-[100px] py-2 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm"
+          >
+            Manage Posts
+          </Link>
+        </div>
+      ) : (
         <div className="px-5 py-3.5 border-t border-slate-50 bg-slate-50/45 flex flex-wrap gap-2.5 mt-auto">
           <Link
             href={creatorProfileUrl}
@@ -767,6 +815,7 @@ function InstagramPostCard({
               disabled={isAnonymous || commentSubmitting}
               value={newCommentBody}
               onChange={(e) => setNewCommentBody(e.target.value)}
+              maxLength={500}
               className="flex-1 bg-white border border-slate-200 rounded-full px-4 py-2 text-xs text-slate-850 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
             />
             <button
