@@ -69,15 +69,35 @@ export async function getConversationByParticipants(
   return data as Conversation | null;
 }
 
+/**
+ * Lists all conversations for a profile, enriched with participant info,
+ * last message, unread counts, and custom order context.
+ *
+ * FIX NOTE: We intentionally do NOT embed `custom_orders` inside the main
+ * SELECT string. Migration 043 added `custom_orders.conversation_id → conversations`
+ * and migration 065 added `conversations.custom_order_id → custom_orders`,
+ * creating two FK relationships in opposite directions between the same tables.
+ * PostgREST raises "Could not embed because more than one relationship was found"
+ * when it sees both. Custom order data is fetched via a separate bulk query
+ * that uses the canonical `custom_orders.conversation_id` FK, which is the
+ * one actually written by custom-order.service.ts.
+ */
 export async function listConversationsForProfile(
   supabase: SupabaseClient,
   profileId: string,
   isCreator?: boolean | null
 ): Promise<ConversationWithDetails[]> {
-  // 1. Fetch conversations
+  // ── Step 1: Fetch conversations ──────────────────────────────────────────
+  // Use explicit FK hint for profiles to disambiguate between buyer_id and
+  // buyer_profile_id (both are FKs from conversations → profiles).
   let query = supabase
     .from('conversations')
-    .select('*, profiles!buyer_id ( full_name, username ), creator_profiles ( display_name, slug ), listings ( title, cover_image_url ), custom_orders!custom_order_id ( status, creator_quote_amount )')
+    .select(
+      '*, ' +
+      'profiles!conversations_buyer_id_fkey ( full_name, username ), ' +
+      'creator_profiles ( display_name, slug ), ' +
+      'listings ( title, cover_image_url )'
+    )
     .is('deleted_at', null);
 
   if (isCreator === true) {
@@ -91,24 +111,31 @@ export async function listConversationsForProfile(
     if (!creatorProfile) return [];
     query = query.eq('creator_id', creatorProfile.id);
   } else if (isCreator === false) {
+    // buyer_id is always populated (non-nullable) — safe to filter by it
     query = query.eq('buyer_id', profileId);
   } else {
-    // Fetch all conversations where current user is participant
-    query = query.or(`buyer_profile_id.eq.${profileId},seller_profile_id.eq.${profileId}`);
+    // Generic participant view: buyer_id is always set; seller_profile_id
+    // is set by migration 065 backfill + maintained by createConversation.
+    query = query.or(`buyer_id.eq.${profileId},seller_profile_id.eq.${profileId}`);
   }
 
-  const { data: conversations, error } = await query.order('last_message_at', { ascending: false, nullsFirst: false });
+  const { data: conversations, error } = await query.order('last_message_at', {
+    ascending: false,
+    nullsFirst: false,
+  });
   if (error) throw new Error(`Failed to list conversations: ${error.message}`);
   if (!conversations || conversations.length === 0) return [];
 
-  // Fetch participant info for this user to enrich archive/pin/mute states
+  const conversationIds = conversations.map((c: any) => c.id);
+
+  // ── Step 2: Participant metadata (archive / pin / mute) ──────────────────
   const { data: participantsData } = await supabase
     .from('conversation_participants')
     .select('*')
+    .in('conversation_id', conversationIds)
     .eq('profile_id', profileId);
 
-  // 2. Fetch last messages & unread counts for all active conversations in bulk
-  const conversationIds = conversations.map((c: any) => c.id);
+  // ── Step 3: Last messages (bulk, keyed by conversation_id) ───────────────
   const lastMessageTimestamps = conversations
     .map((c: any) => c.last_message_at)
     .filter(Boolean);
@@ -120,16 +147,17 @@ export async function listConversationsForProfile(
       .select('conversation_id, body, sender_profile_id, attachment_url, created_at')
       .in('created_at', lastMessageTimestamps)
       .is('deleted_at', null);
-    if (messagesData) {
-      lastMessages = messagesData;
-    }
+    if (messagesData) lastMessages = messagesData;
   }
 
   const lastMessageMap: Record<string, any> = {};
   for (const msg of lastMessages) {
-    lastMessageMap[msg.conversation_id] = msg;
+    if (!lastMessageMap[msg.conversation_id]) {
+      lastMessageMap[msg.conversation_id] = msg;
+    }
   }
 
+  // ── Step 4: Unread counts ────────────────────────────────────────────────
   const { data: unreadCountsData } = await supabase
     .from('messages')
     .select('conversation_id')
@@ -141,14 +169,33 @@ export async function listConversationsForProfile(
   const unreadCountMap: Record<string, number> = {};
   if (unreadCountsData) {
     for (const msg of unreadCountsData) {
-      unreadCountMap[msg.conversation_id] = (unreadCountMap[msg.conversation_id] || 0) + 1;
+      unreadCountMap[msg.conversation_id] =
+        (unreadCountMap[msg.conversation_id] || 0) + 1;
     }
   }
 
+  // ── Step 5: Custom order data ────────────────────────────────────────────
+  // Query via custom_orders.conversation_id (the FK direction actually written
+  // by custom-order.service.ts). This completely avoids the bidirectional FK
+  // ambiguity that caused the original PostgREST error.
+  const customOrderMap: Record<string, { status: string; creator_quote_amount: number | null }> = {};
+  const { data: customOrdersData } = await supabase
+    .from('custom_orders')
+    .select('conversation_id, status, creator_quote_amount')
+    .in('conversation_id', conversationIds)
+    .is('deleted_at', null);
+  if (customOrdersData) {
+    for (const co of customOrdersData) {
+      customOrderMap[co.conversation_id] = co;
+    }
+  }
+
+  // ── Step 6: Enrich and return ────────────────────────────────────────────
   const enriched: ConversationWithDetails[] = conversations.map((c: any) => {
     const lastMsg = lastMessageMap[c.id];
     const count = unreadCountMap[c.id] ?? 0;
     const participant = participantsData?.find((p: any) => p.conversation_id === c.id);
+    const customOrder = customOrderMap[c.id];
 
     return {
       ...c,
@@ -159,23 +206,32 @@ export async function listConversationsForProfile(
       last_message_body: lastMsg?.body ?? (lastMsg?.attachment_url ? 'Sent an attachment' : null),
       last_message_sender_id: lastMsg?.sender_profile_id ?? null,
       unread_count: count,
-      // New context flags from participants
+      // Participant state
       is_archived: participant?.archived_at != null,
       is_pinned: participant?.pinned_at != null,
       muted_until: participant?.muted_until ?? null,
       last_read_at: participant?.last_read_at ?? null,
       role_in_conversation: participant?.role ?? 'participant',
-      // Context details
+      // Listing context
       listing_title: c.listings?.title ?? null,
       listing_image_url: c.listings?.cover_image_url ?? null,
-      custom_order_status: c.custom_orders?.status ?? null,
-      custom_order_price: c.custom_orders?.creator_quote_amount ?? null,
+      // Custom order context — fetched separately to avoid bidirectional FK ambiguity
+      custom_order_status: customOrder?.status ?? null,
+      custom_order_price: customOrder?.creator_quote_amount ?? null,
     };
   });
 
   return enriched;
 }
 
+/**
+ * Creates a new conversation row.
+ *
+ * FIX NOTE: Now accepts and persists buyer_profile_id, seller_profile_id, and
+ * custom_order_id — columns added by migration 065. Without these, the
+ * maintain_conversation_participants trigger fires with NULL profile IDs,
+ * creating orphaned participant rows.
+ */
 export async function createConversation(
   supabase: SupabaseClient,
   data: {
@@ -184,6 +240,11 @@ export async function createConversation(
     order_id?: string | null;
     inquiry_id?: string | null;
     listing_id?: string | null;
+    /** Profile ID of the creator (creator_profiles.user_id). Required for the
+     *  conversation_participants trigger introduced in migration 065. */
+    seller_profile_id?: string | null;
+    /** FK to custom_orders — optional, set when conversation is for a custom order. */
+    custom_order_id?: string | null;
   }
 ): Promise<Conversation> {
   const { data: created, error } = await supabase
@@ -195,6 +256,11 @@ export async function createConversation(
       inquiry_id: data.inquiry_id ?? null,
       listing_id: data.listing_id ?? null,
       last_message_at: null,
+      // Columns from migration 065 — must be populated for the participants
+      // trigger to correctly insert into conversation_participants.
+      buyer_profile_id: data.buyer_id,        // buyer_id IS the profile ID
+      seller_profile_id: data.seller_profile_id ?? null,
+      custom_order_id: data.custom_order_id ?? null,
     })
     .select('*')
     .single();
@@ -281,7 +347,6 @@ export async function markMessagesAsRead(
 
   if (error) throw new Error(`Failed to mark messages as read: ${error.message}`);
 
-  // Also update last_read_at in conversation_participants
   await supabase
     .from('conversation_participants')
     .update({ last_read_at: new Date().toISOString() })
@@ -296,8 +361,7 @@ export async function toggleArchiveConversation(
   archive: boolean
 ): Promise<void> {
   const archivedAt = archive ? new Date().toISOString() : null;
-  
-  // Update in participants table
+
   const { error } = await supabase
     .from('conversation_participants')
     .update({ archived_at: archivedAt })
@@ -306,20 +370,19 @@ export async function toggleArchiveConversation(
 
   if (error) throw new Error(`Failed to archive conversation: ${error.message}`);
 
-  // Maintain array for compatibility if needed
   try {
     if (archive) {
-      await supabase.rpc('conversation_append_archive', { 
-        p_convo_id: conversationId, 
-        p_profile_id: profileId 
+      await supabase.rpc('conversation_append_archive', {
+        p_convo_id: conversationId,
+        p_profile_id: profileId,
       });
     } else {
-      await supabase.rpc('conversation_remove_archive', { 
-        p_convo_id: conversationId, 
-        p_profile_id: profileId 
+      await supabase.rpc('conversation_remove_archive', {
+        p_convo_id: conversationId,
+        p_profile_id: profileId,
       });
     }
-  } catch (e) {
+  } catch {
     // Gracefully ignore if RPC is not defined
   }
 }
@@ -354,4 +417,3 @@ export async function updateMuteConversation(
 
   if (error) throw new Error(`Failed to mute conversation: ${error.message}`);
 }
-

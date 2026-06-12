@@ -151,12 +151,17 @@ export async function getOrCreateConversationForCurrentUser(
   if (existing) return existing;
 
   // 4. Create new conversation
+  // FIX: Pass seller_profile_id (the creator's base profile user_id) so that the
+  // maintain_conversation_participants trigger (migration 065) correctly inserts
+  // both participant rows into conversation_participants. Without this the trigger
+  // fires with a NULL seller_profile_id and silently skips the seller entry.
   return createConversation(supabase, {
     buyer_id: profile.id,
     creator_id: creatorData.id,
     order_id: input.orderId,
     inquiry_id: input.inquiryId,
     listing_id: input.listingId,
+    seller_profile_id: creatorData.user_id,
   });
 }
 
