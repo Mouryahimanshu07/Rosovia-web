@@ -53,7 +53,8 @@ function sanitizeFileName(name: string): string {
 export type StorageKeyContext =
   | { scope: 'profile'; profileId: string }
   | { scope: 'listing'; listingId: string }
-  | { scope: 'private'; profileId: string };
+  | { scope: 'private'; profileId: string }
+  | { scope: 'message_attachment'; conversationId: string; messageId: string };
 
 export function generateStorageKey(context: StorageKeyContext, fileName: string): string {
   const safe = sanitizeFileName(fileName);
@@ -66,6 +67,8 @@ export function generateStorageKey(context: StorageKeyContext, fileName: string)
       return `public/listings/${context.listingId}/${uid}-${safe}`;
     case 'private':
       return `private/users/${context.profileId}/${uid}-${safe}`;
+    case 'message_attachment':
+      return `public/messages/${context.conversationId}/${context.messageId}/${uid}-${safe}`;
   }
 }
 

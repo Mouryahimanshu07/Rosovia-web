@@ -54,14 +54,32 @@ export const signedUploadRequestSchema = z
     ),
     sizeBytes: z.number().int().positive(),
     mediaType: z.enum(['image', 'video', 'document']),
-    usage: z.enum(['profile_image', 'listing_media', 'verification_document', 'post_media', 'general', 'portfolio']),
+    usage: z.enum(['profile_image', 'listing_media', 'verification_document', 'post_media', 'general', 'portfolio', 'message_attachment']),
     listingId: z.string().uuid().optional(),
+    conversationId: z.string().uuid().optional(),
+    messageId: z.string().uuid().optional(),
     isPrivate: z.boolean().optional().default(false),
   })
   .superRefine((data, ctx) => {
     // listing_media requires a listingId
     if (data.usage === 'listing_media' && !data.listingId) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['listingId'], message: 'listingId is required for listing_media uploads.' });
+    }
+
+    // message_attachment requires conversationId and messageId
+    if (data.usage === 'message_attachment') {
+      if (!data.conversationId) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['conversationId'], message: 'conversationId is required for message attachments.' });
+      }
+      if (!data.messageId) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['messageId'], message: 'messageId is required for message attachments.' });
+      }
+      if (!(ALLOWED_IMAGE_MIME_TYPES as readonly string[]).includes(data.mimeType)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mimeType'], message: 'Message attachments must be JPEG, PNG, or WebP.' });
+      }
+      if (data.sizeBytes > 10 * 1024 * 1024) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sizeBytes'], message: 'Message attachments must be 10 MB or smaller.' });
+      }
     }
 
     // verification_document must be private
@@ -138,6 +156,8 @@ export type SignedUploadRequestInput = z.infer<typeof signedUploadRequestSchema>
 
 export const mediaMetadataCreateSchema = z.object({
   listingId: z.string().uuid().optional(),
+  conversationId: z.string().uuid().optional(),
+  messageId: z.string().uuid().optional(),
   mediaType: z.enum(['image', 'video', 'document']),
   storageKey: z.string().min(1).max(1024),
   publicUrl: z.string().url().optional(),
@@ -146,7 +166,7 @@ export const mediaMetadataCreateSchema = z.object({
   mimeType: z.string().min(1).max(255),
   durationSeconds: z.number().int().min(0).optional(),
   isPrivate: z.boolean(),
-  usage: z.enum(['profile_image', 'listing_media', 'verification_document', 'post_media', 'general', 'portfolio']),
+  usage: z.enum(['profile_image', 'listing_media', 'verification_document', 'post_media', 'general', 'portfolio', 'message_attachment']),
 });
 
 export type MediaMetadataCreateInput = z.infer<typeof mediaMetadataCreateSchema>;

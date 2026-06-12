@@ -137,7 +137,7 @@ export async function getOrCreateConversationForCurrentUser(
  */
 export async function listCurrentUserConversations(
   supabase: SupabaseClient,
-  isCreator: boolean
+  isCreator?: boolean | null
 ): Promise<ConversationWithDetails[]> {
   const profile = await resolveActiveProfile(supabase);
   return listConversationsForProfile(supabase, profile.id, isCreator);
@@ -266,7 +266,9 @@ export async function sendCurrentUserMessage(
   const createdMsg = await createMessage(supabase, {
     conversation_id: input.conversationId,
     sender_profile_id: profile.id,
-    body: input.body,
+    body: input.body ?? '',
+    attachment_url: input.attachmentUrl,
+    message_type: input.messageType,
   });
 
   // 4. Update the conversation last_message_at timestamp
@@ -275,8 +277,9 @@ export async function sendCurrentUserMessage(
   // 5. Dispatch message_received notification with transaction-safe try/catch
   try {
     if (recipientProfileId) {
+      const notificationBody = input.body || (input.attachmentUrl ? 'Sent an attachment' : 'New message');
       const truncatedBody =
-        input.body.length > 60 ? `${input.body.substring(0, 60)}...` : input.body;
+        notificationBody.length > 60 ? `${notificationBody.substring(0, 60)}...` : notificationBody;
 
       await createSystemNotification(supabase, {
         recipientProfileId,

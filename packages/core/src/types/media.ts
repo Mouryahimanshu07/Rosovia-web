@@ -16,7 +16,8 @@ export type MediaUsage =
   | 'verification_document'
   | 'post_media'
   | 'general'
-  | 'portfolio';
+  | 'portfolio'
+  | 'message_attachment';
 
 export interface MediaAsset {
   id: string;

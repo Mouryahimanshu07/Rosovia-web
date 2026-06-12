@@ -65,6 +65,23 @@ export async function createSignedMediaUpload(
     if (!listing) throw new Error('Listing not found.');
     if (listing.creator_id !== creatorProfile.id) throw new Error('You do not own this listing.');
     storageKey = generateStorageKey({ scope: 'listing', listingId: input.listingId }, input.fileName);
+  } else if (input.usage === 'message_attachment' && input.conversationId && input.messageId) {
+    // Verify user is a participant of the conversation
+    const { data: participation } = await supabase
+      .from('conversation_participants')
+      .select('profile_id')
+      .eq('conversation_id', input.conversationId)
+      .eq('profile_id', profile.id)
+      .maybeSingle();
+
+    if (!participation) {
+      throw new Error('You are not authorized to upload attachments for this conversation.');
+    }
+    storageKey = generateStorageKey({
+      scope: 'message_attachment',
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+    }, input.fileName);
   } else if (input.usage === 'post_media') {
     storageKey = generateStorageKey({ scope: 'profile', profileId: `${profile.id}/posts` }, input.fileName);
   } else if (input.usage === 'portfolio') {
@@ -111,6 +128,23 @@ export async function saveUploadedMediaMetadata(
   // For listing_media, also allow listing-scoped paths
   if (input.usage === 'listing_media' && input.listingId) {
     allowedPrefixes.push(`public/listings/${input.listingId}/`);
+  }
+
+  // For message_attachment, also allow message-scoped paths
+  if (input.usage === 'message_attachment' && input.conversationId && input.messageId) {
+    allowedPrefixes.push(`public/messages/${input.conversationId}/${input.messageId}/`);
+    
+    // Verify user is a participant of the conversation
+    const { data: participation } = await supabase
+      .from('conversation_participants')
+      .select('profile_id')
+      .eq('conversation_id', input.conversationId)
+      .eq('profile_id', profile.id)
+      .maybeSingle();
+
+    if (!participation) {
+      throw new Error('You are not authorized to save attachments for this conversation.');
+    }
   }
 
   const keyIsAllowed = allowedPrefixes.some((prefix) => input.storageKey.startsWith(prefix));

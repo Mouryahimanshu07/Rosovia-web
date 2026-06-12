@@ -10,6 +10,14 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  conversation_type?: 'direct' | 'listing' | 'inquiry' | 'custom_order' | 'support';
+  buyer_profile_id?: string;
+  seller_profile_id?: string;
+  listing_id?: string | null;
+  custom_order_id?: string | null;
+  archived_by?: string[];
+  pinned_by?: string[];
+  muted_by?: string[];
 }
 
 export interface ConversationWithDetails extends Conversation {
@@ -20,6 +28,16 @@ export interface ConversationWithDetails extends Conversation {
   last_message_body: string | null;
   last_message_sender_id: string | null;
   unread_count: number;
+  is_archived: boolean;
+  is_pinned: boolean;
+  muted_until: string | null;
+  last_read_at: string | null;
+  role_in_conversation: string;
+  // Details from linked context
+  listing_title?: string | null;
+  listing_image_url?: string | null;
+  custom_order_status?: string | null;
+  custom_order_price?: number | null;
 }
 
 export interface Message {
@@ -31,6 +49,10 @@ export interface Message {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  attachment_url?: string | null;
+  message_type?: string;
+  edited_at?: string | null;
+  status?: string;
 }
 
 export interface MessageWithSender extends Message {
@@ -48,4 +70,6 @@ export interface CreateConversationInput {
 export interface SendMessageInput {
   conversationId: string;
   body: string;
+  attachmentUrl?: string | null;
+  messageType?: string;
 }

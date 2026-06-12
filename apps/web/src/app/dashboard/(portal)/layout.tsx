@@ -1,15 +1,15 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { 
-  LayoutDashboard, 
-  ListTodo, 
-  ShoppingBag, 
-  Settings as SettingsIcon,
-  Palette,
+  Bell,
+  Plus,
+  MessageSquare
 } from 'lucide-react';
 
 import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile, getDashboardRedirectPath } from '@rosovia/api';
+import { getCurrentProfile, getDashboardRedirectPath, getUnreadCountForCurrentUser, getUnreadMessageCountForCurrentUser } from '@rosovia/api';
+import { SidebarNav } from './sidebar-nav';
+import { DashboardSearchInput } from '~/components/dashboard/DashboardSearchInput';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,57 +26,21 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
   const isCreator = profile.role === 'creator';
   const isBuyer = profile.role === 'buyer';
-  const isAdmin = profile.role === 'admin';
 
   // Construct dynamic href targets based on user role
   const dashboardPath = getDashboardRedirectPath(profile.role);
-  const ordersPath = isCreator ? '/dashboard/creator/orders' : '/dashboard/buyer/orders';
-
-  // Sidebar navigation — Dashboard | My Listings | My Portfolio | Orders | Settings
-  // (Edit Profile and My Posts are in /u/[username], Messages is in top navbar)
-  const sidebarLinks = [
-    {
-      label: 'Dashboard',
-      href: dashboardPath,
-      icon: LayoutDashboard,
-      visible: true
-    },
-    {
-      label: 'My Listings',
-      href: '/dashboard/creator/listings',
-      icon: ListTodo,
-      visible: isCreator || isAdmin
-    },
-    {
-      label: 'My Portfolio',
-      href: '/dashboard/portfolio',
-      icon: Palette,
-      visible: isCreator
-    },
-    {
-      label: 'Orders',
-      href: ordersPath,
-      icon: ShoppingBag,
-      visible: !isAdmin
-    },
-    {
-      label: 'Settings',
-      href: '/dashboard/settings',
-      icon: SettingsIcon,
-      visible: true
-    }
-  ];
+  const unreadMessagesCount = await getUnreadMessageCountForCurrentUser(supabase).catch(() => 0);
+  const unreadNotificationsCount = await getUnreadCountForCurrentUser(supabase).catch(() => 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row antialiased">
       
       {/* ── PREMIUM DASHBOARD SIDEBAR ──────────────────────── */}
-      <aside className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-gray-200 flex-shrink-0 relative z-20">
-        <div className="h-full flex flex-col p-6 space-y-8">
-          
+      <aside className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex-shrink-0 relative z-20 flex flex-col justify-between">
+        <div className="p-6 space-y-6 flex-1 flex flex-col">
           {/* User profile brief */}
-          <div className="flex items-center gap-3 p-2 rounded-2xl bg-gray-50 border border-gray-100/50">
-            <div className="w-10 h-10 rounded-xl overflow-hidden relative bg-indigo-50 border border-gray-100 flex-shrink-0 flex items-center justify-center font-bold text-indigo-600">
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-white border border-slate-200 shadow-sm">
+            <div className="w-10 h-10 rounded-xl overflow-hidden relative bg-indigo-55/10 border border-indigo-100 flex-shrink-0 flex items-center justify-center font-bold text-indigo-600">
               {profile.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
@@ -85,59 +49,114 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               )}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-black text-gray-900 truncate max-w-full">
+              <p className="text-xs font-bold text-slate-800 truncate">
                 {profile.full_name || profile.username}
               </p>
-              <p className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-widest mt-0.5">
+              <span className="inline-block px-1.5 py-0.5 text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100/60 rounded-md mt-0.5 uppercase tracking-wide">
                 {profile.role}
-              </p>
+              </span>
             </div>
           </div>
 
           {/* Navigation link group */}
-          <nav className="flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible space-x-2 md:space-x-0 md:space-y-1.5 pb-2 md:pb-0 scrollbar-none">
-            {sidebarLinks.map((link) => {
-              if (!link.visible) return null;
-              const Icon = link.icon;
-              
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-gray-500 hover:bg-indigo-50/50 hover:text-indigo-600 border border-transparent hover:border-indigo-100/30 transition-all duration-200 whitespace-nowrap"
-                >
-                  <Icon className="h-4.5 w-4.5 flex-shrink-0" />
-                  <span>{link.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          <SidebarNav
+            role={profile.role}
+            username={profile.username}
+            dashboardPath={dashboardPath}
+            unreadMessagesCount={unreadMessagesCount}
+          />
           
           {/* Decorative premium onboarding card if buyer */}
           {isBuyer && (
-            <div className="hidden md:block rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-700 p-4 text-white shadow-md relative overflow-hidden">
+            <div className="hidden md:block rounded-2xl bg-gradient-to-br from-indigo-700 to-purple-800 p-4 text-white shadow-xl relative overflow-hidden border border-indigo-600/30">
               <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-white/10 rounded-full blur-xl pointer-events-none" />
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-200">Start Selling</p>
-              <h4 className="font-extrabold text-xs mt-1.5">Become a Creator</h4>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-200">Start Selling</p>
+              <h4 className="font-extrabold text-xs mt-1">Become a Creator</h4>
               <p className="text-[10px] text-indigo-100 mt-1 leading-relaxed">Publish listings and showcase posts to buyers nationwide.</p>
               <Link 
                 href="/dashboard/profile" 
-                className="mt-3 inline-flex items-center justify-center w-full py-2 bg-white text-indigo-600 rounded-xl text-[10px] font-black hover:bg-indigo-50 shadow-sm active:scale-95 transition"
+                className="mt-3 inline-flex items-center justify-center w-full py-2 bg-white text-indigo-600 rounded-xl text-[10px] font-black hover:bg-indigo-50 shadow-md active:scale-95 transition"
               >
                 Upgrade Profile
               </Link>
             </div>
           )}
-
         </div>
       </aside>
 
-      {/* ── MAIN DASHBOARD VIEWPORT ────────────────────────── */}
-      <main className="flex-1 min-w-0 overflow-y-auto">
-        <div className="max-w-5xl mx-auto py-4 px-2 sm:px-4 md:py-8 md:px-8">
-          {children}
-        </div>
-      </main>
+      {/* ── MAIN VIEWPORT with TOP HEADER ────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* Sticky Top Header */}
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white/85 backdrop-blur px-6">
+          {/* Search bar */}
+          <DashboardSearchInput />
+
+          <div className="flex items-center gap-4 ml-auto">
+            {/* Create button */}
+            {isCreator && (
+              <Link
+                href="/dashboard/creator/listings"
+                className="inline-flex items-center justify-center gap-1.5 px-4 h-9 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition active:scale-[0.98]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Create Listing</span>
+              </Link>
+            )}
+
+            {/* Notifications Shortcut */}
+            <Link
+              href="/dashboard/notifications"
+              className="relative p-1.5 text-slate-500 hover:text-slate-800 transition rounded-lg hover:bg-slate-100"
+              title="Notifications"
+            >
+              <Bell className="h-4.5 w-4.5" />
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute top-1 right-1 flex h-2 w-2 rounded-full bg-red-500" />
+              )}
+            </Link>
+
+            {/* Messages Shortcut */}
+            <Link
+              href="/dashboard/messages"
+              className="relative p-1.5 text-slate-500 hover:text-slate-800 transition rounded-lg hover:bg-slate-100"
+              title="Messages"
+            >
+              <MessageSquare className="h-4.5 w-4.5" />
+              {unreadMessagesCount > 0 && (
+                <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[8px] font-bold text-white">
+                  {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Divider */}
+            <div className="h-6 w-px bg-slate-200" />
+
+            {/* User Profile avatar menu */}
+            <Link
+              href={profile.username ? `/u/${profile.username}` : '/dashboard/profile'}
+              className="flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900"
+            >
+              <div className="w-7 h-7 rounded-full overflow-hidden relative bg-indigo-50 border border-indigo-100 flex-shrink-0 flex items-center justify-center font-bold text-indigo-600">
+                {profile.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  (profile.full_name || profile.username || 'R').charAt(0).toUpperCase()
+                )}
+              </div>
+            </Link>
+          </div>
+        </header>
+
+        {/* Content Container */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto py-6 px-4 md:py-8 md:px-8">
+            {children}
+          </div>
+        </main>
+      </div>
 
     </div>
   );

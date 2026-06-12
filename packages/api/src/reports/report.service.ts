@@ -86,6 +86,39 @@ export async function createCurrentUserReport(
     }
   }
 
+  // 4b. For message reports: current user must be a participant in the conversation
+  if (input.targetType === 'message') {
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .select('conversation_id')
+      .eq('id', input.targetId)
+      .is('deleted_at', null)
+      .single();
+
+    if (messageError || !message) {
+      throw new Error('The reported message does not exist or has been removed.');
+    }
+
+    const { data: conversation, error: conversationError } = await supabase
+      .from('conversations')
+      .select('buyer_profile_id, seller_profile_id')
+      .eq('id', message.conversation_id)
+      .is('deleted_at', null)
+      .single();
+
+    if (conversationError || !conversation) {
+      throw new Error('The conversation for the reported message was not found.');
+    }
+
+    const isParticipant =
+      conversation.buyer_profile_id === profile.id ||
+      conversation.seller_profile_id === profile.id;
+
+    if (!isParticipant) {
+      throw new Error('You can only report messages from conversations you are part of.');
+    }
+  }
+
   // 5. Prevent duplicate pending reports (same reporter + target)
   const existingPending = await getDuplicatePendingReport(
     supabase,

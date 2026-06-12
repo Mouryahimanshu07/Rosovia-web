@@ -6,6 +6,10 @@ import { createWebServerClient } from '~/lib/supabase/server';
 import {
   sendCurrentUserMessage,
   getOrCreateConversationForCurrentUser,
+  toggleArchiveConversation,
+  togglePinConversation,
+  updateMuteConversation,
+  createCurrentUserReport,
 } from '@rosovia/api';
 import { messageSendSchema, conversationCreateSchema } from '@rosovia/core';
 import { headers } from 'next/headers';
@@ -27,9 +31,10 @@ type ActionResult<T = undefined> =
 
 export async function sendMessageAction(
   conversationId: string,
-  body: string
+  body: string,
+  attachmentUrl?: string | null
 ): Promise<ActionResult> {
-  const parsed = messageSendSchema.safeParse({ conversationId, body });
+  const parsed = messageSendSchema.safeParse({ conversationId, body, attachmentUrl });
   if (!parsed.success) {
     return {
       success: false,
@@ -43,6 +48,7 @@ export async function sendMessageAction(
     await sendCurrentUserMessage(supabase, {
       conversationId: parsed.data.conversationId,
       body: parsed.data.body,
+      attachmentUrl: parsed.data.attachmentUrl,
     });
     revalidatePath(`/dashboard/messages`);
     return { success: true };
@@ -245,6 +251,155 @@ export async function acceptAndCreateCustomOfferOrderAction(
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to accept custom offer',
+    };
+  }
+}
+
+export async function archiveConversationAction(
+  conversationId: string,
+  archive: boolean
+): Promise<ActionResult> {
+  try {
+    const supabase = createWebServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Not authenticated' };
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (!profile) return { success: false, error: 'Profile not found' };
+
+    await toggleArchiveConversation(supabase, conversationId, profile.id, archive);
+    revalidatePath(`/dashboard/messages`);
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to archive conversation',
+    };
+  }
+}
+
+export async function pinConversationAction(
+  conversationId: string,
+  pin: boolean
+): Promise<ActionResult> {
+  try {
+    const supabase = createWebServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Not authenticated' };
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (!profile) return { success: false, error: 'Profile not found' };
+
+    await togglePinConversation(supabase, conversationId, profile.id, pin);
+    revalidatePath(`/dashboard/messages`);
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to pin conversation',
+    };
+  }
+}
+
+export async function muteConversationAction(
+  conversationId: string,
+  until: string | null
+): Promise<ActionResult> {
+  try {
+    const supabase = createWebServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Not authenticated' };
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (!profile) return { success: false, error: 'Profile not found' };
+
+    await updateMuteConversation(supabase, conversationId, profile.id, until);
+    revalidatePath(`/dashboard/messages`);
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to mute conversation',
+    };
+  }
+}
+
+export async function blockUserAction(
+  targetProfileId: string,
+  block: boolean
+): Promise<ActionResult> {
+  try {
+    const supabase = createWebServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Not authenticated' };
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (!profile) return { success: false, error: 'Profile not found' };
+
+    if (block) {
+      const { error } = await supabase
+        .from('user_blocks')
+        .insert({ blocker_id: profile.id, blocked_id: targetProfileId });
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabase
+        .from('user_blocks')
+        .delete()
+        .eq('blocker_id', profile.id)
+        .eq('blocked_id', targetProfileId);
+      if (error) throw new Error(error.message);
+    }
+
+    revalidatePath('/dashboard/messages');
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to toggle block status',
+    };
+  }
+}
+
+export async function reportMessageAction(
+  messageId: string,
+  reason: string,
+  description: string
+): Promise<ActionResult> {
+  try {
+    const supabase = createWebServerClient();
+    await createCurrentUserReport(supabase, {
+      targetType: 'message',
+      targetId: messageId,
+      reason: reason as any,
+      description: description || undefined,
+    });
+
+    revalidatePath('/dashboard/messages');
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to report message',
     };
   }
 }

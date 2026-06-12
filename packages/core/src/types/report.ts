@@ -1,6 +1,6 @@
 // Report types for Rosovia Module 14: Reports and Moderation
 
-export type ReportTargetType = 'creator' | 'listing' | 'review' | 'inquiry' | 'user' | 'post';
+export type ReportTargetType = 'creator' | 'listing' | 'review' | 'inquiry' | 'user' | 'post' | 'message';
 
 export type ReportStatus = 'pending' | 'reviewed' | 'resolved' | 'rejected';
 

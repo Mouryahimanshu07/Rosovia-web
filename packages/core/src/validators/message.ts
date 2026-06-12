@@ -10,8 +10,14 @@ export const messageSendSchema = z.object({
   conversationId: z.string().uuid('Conversation ID must be a valid UUID'),
   body: z
     .string()
-    .min(1, 'Message cannot be empty')
-    .max(2000, 'Message must be 2000 characters or fewer'),
+    .max(2000, 'Message must be 2000 characters or fewer')
+    .optional()
+    .or(z.literal('')),
+  attachmentUrl: z.string().optional().nullable(),
+  messageType: z.string().optional(),
+}).refine(data => (data.body && data.body.trim().length > 0) || data.attachmentUrl, {
+  message: 'Message cannot be empty',
+  path: ['body'],
 });
 
 export type ConversationCreateInput = z.infer<typeof conversationCreateSchema>;

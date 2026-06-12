@@ -11,6 +11,7 @@ export const REPORT_TARGET_TYPES = [
   'inquiry',
   'user',
   'post',
+  'message',
 ] as const;
 
 

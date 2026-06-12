@@ -225,6 +225,151 @@ describe('Reports & Moderation Service Pipeline', () => {
         })
       ).rejects.toThrow('You can only report inquiries you are part of.');
     });
+
+    it('enforces conversation participant limits for message reports', async () => {
+      vi.mocked(getProfileByAuthUserId).mockResolvedValueOnce({
+        id: REPORTER_ID,
+        auth_user_id: 'auth-user-123',
+        status: 'active',
+        role: 'buyer',
+        full_name: 'Reporter Name',
+        username: 'reporter',
+        created_at: '',
+        updated_at: '',
+        deleted_at: null,
+      } as any);
+
+      vi.mocked(validateReportTargetExists).mockResolvedValueOnce(true);
+      vi.mocked(getDuplicatePendingReport).mockResolvedValueOnce(null);
+
+      // Mock message and conversation queries
+      const mockSingleMessage = vi.fn().mockResolvedValue({
+        data: { conversation_id: 'convo-123' },
+        error: null,
+      });
+      const mockSingleConversation = vi.fn().mockResolvedValue({
+        data: { buyer_profile_id: 'other-buyer-id', seller_profile_id: 'other-seller-id' },
+        error: null,
+      });
+
+      mockSupabase.from = vi.fn((table) => {
+        if (table === 'messages') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            is: vi.fn().mockReturnThis(),
+            single: mockSingleMessage,
+          };
+        }
+        if (table === 'conversations') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            is: vi.fn().mockReturnThis(),
+            single: mockSingleConversation,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      });
+
+      await expect(
+        createCurrentUserReport(mockSupabase as SupabaseClient, {
+          targetType: 'message',
+          targetId: 'msg-123',
+          reason: 'harassment',
+        })
+      ).rejects.toThrow('You can only report messages from conversations you are part of.');
+    });
+
+    it('succeeds for message report if reporter is a participant in the conversation', async () => {
+      vi.mocked(getProfileByAuthUserId).mockResolvedValueOnce({
+        id: REPORTER_ID,
+        auth_user_id: 'auth-user-123',
+        status: 'active',
+        role: 'buyer',
+        full_name: 'Reporter Name',
+        username: 'reporter',
+        created_at: '',
+        updated_at: '',
+        deleted_at: null,
+      } as any);
+
+      vi.mocked(validateReportTargetExists).mockResolvedValueOnce(true);
+      vi.mocked(getDuplicatePendingReport).mockResolvedValueOnce(null);
+
+      // Mock message and conversation queries where REPORTER_ID is buyer
+      const mockSingleMessage = vi.fn().mockResolvedValue({
+        data: { conversation_id: 'convo-123' },
+        error: null,
+      });
+      const mockSingleConversation = vi.fn().mockResolvedValue({
+        data: { buyer_profile_id: REPORTER_ID, seller_profile_id: 'other-seller-id' },
+        error: null,
+      });
+
+      mockSupabase.from = vi.fn((table) => {
+        if (table === 'messages') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            is: vi.fn().mockReturnThis(),
+            single: mockSingleMessage,
+          };
+        }
+        if (table === 'conversations') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            is: vi.fn().mockReturnThis(),
+            single: mockSingleConversation,
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      });
+
+      vi.mocked(createReport).mockResolvedValueOnce({
+        id: REPORT_ID,
+        reporter_id: REPORTER_ID,
+        target_type: 'message',
+        target_id: 'msg-123',
+        reason: 'harassment',
+        description: 'abusive text',
+        status: 'pending',
+        admin_note: null,
+        reviewed_by: null,
+        reviewed_at: null,
+        created_at: '',
+        updated_at: '',
+        deleted_at: null,
+      });
+
+      const res = await createCurrentUserReport(mockSupabase as SupabaseClient, {
+        targetType: 'message',
+        targetId: 'msg-123',
+        reason: 'harassment',
+        description: 'abusive text',
+      });
+
+      expect(res).toBeDefined();
+      expect(res.target_type).toBe('message');
+      expect(createReport).toHaveBeenCalledWith(mockSupabase, {
+        reporter_id: REPORTER_ID,
+        target_type: 'message',
+        target_id: 'msg-123',
+        reason: 'harassment',
+        description: 'abusive text',
+      });
+    });
   });
 
   describe('moderateReportAsAdmin', () => {

@@ -10,8 +10,8 @@ export function DashboardShell({ children, title, description, className = '', .
   return (
     <div className={`flex flex-col gap-6 p-8 ${className}`} {...props}>
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">{title}</h1>
-        {description && <p className="text-gray-500 mt-1">{description}</p>}
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{title}</h1>
+        {description && <p className="text-slate-500 dark:text-slate-450 mt-1">{description}</p>}
       </div>
       <div className="flex-1">
         {children}
