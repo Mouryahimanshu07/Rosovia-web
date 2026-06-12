@@ -23,18 +23,30 @@ import {
 } from './message.repository';
 import { createSystemNotification } from '../notifications/notification.service';
 
-// ---------------------------------------------------------------------------
-// Internal Helper: resolve active authenticated profile
-// ---------------------------------------------------------------------------
+const profileCache = new WeakMap<SupabaseClient, any>();
+
 async function resolveActiveProfile(supabase: SupabaseClient) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  if (profileCache.has(supabase)) {
+    const cached = profileCache.get(supabase);
+    if (cached instanceof Error) throw cached;
+    return cached;
+  }
 
-  const profile = await getProfileByAuthUserId(supabase, user.id);
-  if (!profile) throw new Error('Profile not found');
-  if (profile.status !== 'active') throw new Error('Your account is not active');
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
 
-  return profile;
+    const profile = await getProfileByAuthUserId(supabase, user.id);
+    if (!profile) throw new Error('Profile not found');
+    if (profile.status !== 'active') throw new Error('Your account is not active');
+
+    profileCache.set(supabase, profile);
+    return profile;
+  } catch (err) {
+    const errorObj = err instanceof Error ? err : new Error(String(err));
+    profileCache.set(supabase, errorObj);
+    throw errorObj;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -112,13 +124,28 @@ export async function getOrCreateConversationForCurrentUser(
     }
   }
 
+  if (input.listingId) {
+    const { data: listing, error: listingError } = await supabase
+      .from('listings')
+      .select('id, creator_id')
+      .eq('id', input.listingId)
+      .is('deleted_at', null)
+      .single();
+
+    if (listingError || !listing) throw new Error('Associated listing not found');
+    if (listing.creator_id !== creatorData.id) {
+      throw new Error('This listing does not belong to this creator');
+    }
+  }
+
   // 3. Check for existing conversation with these exact parameters
   const existing = await getConversationByParticipants(
     supabase,
     profile.id,
     creatorData.id,
     input.orderId,
-    input.inquiryId
+    input.inquiryId,
+    input.listingId
   );
 
   if (existing) return existing;
@@ -129,6 +156,7 @@ export async function getOrCreateConversationForCurrentUser(
     creator_id: creatorData.id,
     order_id: input.orderId,
     inquiry_id: input.inquiryId,
+    listing_id: input.listingId,
   });
 }
 

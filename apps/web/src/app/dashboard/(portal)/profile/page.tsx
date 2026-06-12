@@ -1,12 +1,10 @@
 import { redirect } from 'next/navigation';
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile } from '@rosovia/api';
+import { getServerProfile } from '~/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RedirectToNewProfileEditPage() {
-  const supabase = createWebServerClient();
-  const profile = await getCurrentProfile(supabase);
+  const profile = await getServerProfile();
 
   if (!profile) redirect('/login');
   if (profile.username) {

@@ -204,6 +204,7 @@ describe('Listing & Post Moderation Acceptance Tests', () => {
     vi.mocked(getListingById).mockResolvedValueOnce({
       id: LISTING_UUID,
       creator_id: CREATOR_PROFILE_ID,
+      title: 'suspicious spam listing',
       status: 'draft',
       slug: 'craft-vase',
     } as any);

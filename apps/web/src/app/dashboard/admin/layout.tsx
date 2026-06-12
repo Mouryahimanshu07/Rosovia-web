@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile } from '@rosovia/api';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,8 +20,8 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const profile = await getServerProfile();
   const supabase = createWebServerClient();
-  const profile = await getCurrentProfile(supabase);
 
   // Server-side auth gate
   if (!profile) redirect('/login');

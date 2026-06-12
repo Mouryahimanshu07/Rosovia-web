@@ -3,7 +3,7 @@ import Image from 'next/image';
 import type { Metadata } from 'next';
 import type { ListingWithDetails } from '@rosovia/core';
 export const dynamic = 'force-dynamic';
-import { createWebServerClient } from '~/lib/supabase/server';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
 import {
   getPublicCreatorProfileBySlug,
   listReviewsForPublicCreator,
@@ -43,45 +43,40 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CreatorPublicProfilePage({ params }: Props) {
   const supabase = createWebServerClient();
-  const profile = await getPublicCreatorProfileBySlug(supabase, params.slug);
+  
+  // 1. Fetch creator profile and current user profile in parallel (request-memoized)
+  const [profile, ownProfile] = await Promise.all([
+    getPublicCreatorProfileBySlug(supabase, params.slug),
+    getServerProfile(),
+  ]);
 
   if (!profile) notFound();
 
-  // Get authenticated user
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = ownProfile;
+  const isOwnProfile = ownProfile !== null && ownProfile.id === profile.user_id;
+  const ownerUsername = isOwnProfile ? ownProfile.username : null;
 
+  // 2. Fetch initial saved/following states in parallel
   const [initialSaved, initialFollowing] = await Promise.all([
-    user ? isCreatorSavedForUser(supabase, profile.id) : Promise.resolve(false),
-    user ? isCurrentUserFollowingProfile(supabase, profile.user_id) : Promise.resolve(false),
+    ownProfile ? isCreatorSavedForUser(supabase, profile.id) : Promise.resolve(false),
+    ownProfile ? isCurrentUserFollowingProfile(supabase, profile.user_id) : Promise.resolve(false),
   ]);
 
-  // Is current user this creator? Used to swap Follow/Message for Edit Profile
-  let isOwnProfile = false;
-  let ownerUsername: string | null = null;
-  if (user) {
-    const { data: ownProfile } = await supabase
-      .from('profiles')
-      .select('id, username')
-      .eq('auth_user_id', user.id)
-      .single();
-    if (ownProfile?.id === profile.user_id) {
-      isOwnProfile = true;
-      ownerUsername = ownProfile.username ?? null;
-    }
-  }
-
-  // Parallelize public data fetching
+  // 3. Parallelize public data fetching
   const [reviews, listings, portfolioMedia, collections, workPosts] = await Promise.all([
     listReviewsForPublicCreator(supabase, profile.id),
     listCreatorPublicListings(supabase, profile.id),
     listCreatorPublicPortfolioMedia(supabase, profile.user_id),
     listCollectionsForPublicProfile(supabase, profile.id),
-    listPublicPostsForCreatorProfile(supabase, profile.id, {
-      isFollowing: initialFollowing,
-      isSelf: !!isOwnProfile,
-    }),
+    listPublicPostsForCreatorProfile(
+      supabase,
+      profile.id,
+      {
+        isFollowing: initialFollowing,
+        isSelf: !!isOwnProfile,
+      },
+      ownProfile?.id
+    ),
   ]);
 
   // Partition listings into appropriate sections
@@ -247,7 +242,7 @@ export default async function CreatorPublicProfilePage({ params }: Props) {
                 {/* Message CTA */}
                 {user ? (
                   <Link
-                    href={`/dashboard/messages?creator=${profile.id}`}
+                    href={`/messages?creator=${profile.id}`}
                     id={`message-creator-${profile.id}`}
                     className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-semibold border border-gray-200 bg-white text-gray-700 hover:border-indigo-400 hover:text-indigo-700 transition-all shadow-sm hover:shadow active:scale-95 duration-150"
                   >

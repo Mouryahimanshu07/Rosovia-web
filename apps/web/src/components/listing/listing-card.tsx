@@ -76,7 +76,7 @@ export function ListingCard({ listing, showStatus = false }: ListingCardProps) {
         </div>
 
         <Link
-          href={`/dashboard/messages?creator=${listing.creator_id}`}
+          href={`/messages?creator=${listing.creator_id}`}
           className="text-xs font-semibold bg-gray-50 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded px-2.5 py-1.5 transition-all"
         >
           Ask Creator

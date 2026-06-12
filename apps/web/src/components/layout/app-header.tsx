@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { Bell, MessageCircle } from 'lucide-react';
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile, getDashboardRedirectPath, getUnreadCountForCurrentUser, getUnreadMessageCountForCurrentUser } from '@rosovia/api';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
+import { getDashboardRedirectPath, getUnreadCountForCurrentUser, getUnreadMessageCountForCurrentUser } from '@rosovia/api';
 
 
 export async function AppHeader() {
+  const profile = await getServerProfile();
   const supabase = createWebServerClient();
-  const profile = await getCurrentProfile(supabase);
 
   const dashboardPath = profile ? getDashboardRedirectPath(profile.role) : null;
 
@@ -14,14 +14,14 @@ export async function AppHeader() {
   let unreadMessagesCount = 0;
   if (profile) {
     try {
-      unreadCount = await getUnreadCountForCurrentUser(supabase);
+      const [notificationsRes, messagesRes] = await Promise.all([
+        getUnreadCountForCurrentUser(supabase),
+        getUnreadMessageCountForCurrentUser(supabase),
+      ]);
+      unreadCount = notificationsRes;
+      unreadMessagesCount = messagesRes;
     } catch (e) {
-      console.error('Failed to fetch unread notification count:', e);
-    }
-    try {
-      unreadMessagesCount = await getUnreadMessageCountForCurrentUser(supabase);
-    } catch (e) {
-      console.error('Failed to fetch unread messages count:', e);
+      console.error('Failed to fetch unread counts:', e);
     }
   }
 
@@ -40,7 +40,7 @@ export async function AppHeader() {
           {profile && dashboardPath ? (
             <>
               <Link
-                href="/dashboard/messages"
+                href="/messages"
                 className="text-gray-600 hover:text-gray-950 flex items-center gap-1.5"
               >
                 <span>Messages</span>

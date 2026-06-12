@@ -3,8 +3,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getProfileByUsername, listProfileFollowing, isCurrentUserFollowingProfile, getCurrentProfile } from '@rosovia/api';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
+import { getProfileByUsername, listProfileFollowing, isCurrentUserFollowingProfile } from '@rosovia/api';
 import { ProfileFollowButton } from '~/components/follow/profile-follow-button';
 
 export const dynamic = 'force-dynamic';
@@ -16,21 +16,21 @@ interface Props {
 export default async function FollowingListPage({ params }: Props) {
   const supabase = createWebServerClient();
   
-  // 1. Fetch base profile
-  const baseProfile = await getProfileByUsername(supabase, params.username);
+  // 1. Fetch base profile and current user profile in parallel (request-memoized)
+  const [baseProfile, currentUserProfile] = await Promise.all([
+    getProfileByUsername(supabase, params.username),
+    getServerProfile(),
+  ]);
+
   if (!baseProfile) notFound();
 
-  // 2. Fetch authenticated session and resolve current user profile
-  const { data: { user } } = await supabase.auth.getUser();
-  const currentUserProfile = user ? await getCurrentProfile(supabase) : null;
-
-  // 3. List following
+  // 2. List following
   const following = await listProfileFollowing(supabase, baseProfile.id);
 
-  // 4. For each following, check if current user is following them
+  // 3. For each following, check if current user is following them
   const followingWithFollowingState = await Promise.all(
     following.map(async (f) => {
-      const isFollowing = user ? await isCurrentUserFollowingProfile(supabase, f.id) : false;
+      const isFollowing = currentUserProfile ? await isCurrentUserFollowingProfile(supabase, f.id) : false;
       return {
         ...f,
         isFollowing,

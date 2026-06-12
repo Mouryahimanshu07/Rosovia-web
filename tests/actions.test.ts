@@ -59,7 +59,7 @@ vi.mock('next/headers', () => ({
 // Imports after hoisting
 import { rateLimit } from '~/lib/rate-limit';
 import { followCreatorAction, followProfileAction } from '~/app/actions/follows';
-import { sendMessageAction } from '~/app/dashboard/(portal)/messages/actions';
+import { sendMessageAction } from '~/app/messages/actions';
 import { createReportAction } from '~/app/actions/reports';
 
 const VALID_CREATOR_UUID = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44';

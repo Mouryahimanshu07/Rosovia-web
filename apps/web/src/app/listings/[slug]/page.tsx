@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 export const dynamic = 'force-dynamic';
-import { createWebServerClient } from '~/lib/supabase/server';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
 import {
   getPublicListingBySlug,
   listReviewsForPublicListing,
@@ -49,19 +49,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PublicListingDetailPage({ params }: Props) {
   const supabase = createWebServerClient();
-  const listing = await getPublicListingBySlug(supabase, params.slug);
+  
+  // 1. Fetch listing and current user profile in parallel (request-memoized)
+  const [listing, userProfile] = await Promise.all([
+    getPublicListingBySlug(supabase, params.slug),
+    getServerProfile(),
+  ]);
 
   if (!listing) notFound();
 
-  const reviews = await listReviewsForPublicListing(supabase, listing.id);
+  // 2. Fetch reviews and saved status check in parallel
+  const [reviews, initialSaved] = await Promise.all([
+    listReviewsForPublicListing(supabase, listing.id),
+    userProfile ? isListingSavedForUser(supabase, listing.id) : Promise.resolve(false),
+  ]);
 
+  const user = userProfile;
   const location = [listing.city, listing.state].filter(Boolean).join(', ');
-
-  // Check auth state for inquiry and custom order sections
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const initialSaved = user ? await isListingSavedForUser(supabase, listing.id) : false;
-
   const inquiryType = defaultInquiryTypeForListing(listing.listing_type);
   const loginRedirect = `/login?redirected_from=/listings/${params.slug}`;
 

@@ -29,9 +29,12 @@ async function getViewerProfileId(supabase: SupabaseClient): Promise<string | nu
 
 export async function listPublicWorkFeedPosts(
   supabase: SupabaseClient,
-  params: FeedParams = {}
+  params: FeedParams = {},
+  viewerProfileId?: string | null
 ): Promise<{ data: CreatorPostWithDetails[]; hasNext: boolean }> {
-  const viewerProfileId = await getViewerProfileId(supabase);
+  const resolvedViewerProfileId = viewerProfileId !== undefined
+    ? viewerProfileId
+    : await getViewerProfileId(supabase);
   const page = params.page ?? 1;
   const offset = (page - 1) * PAGE_SIZE;
 
@@ -92,7 +95,7 @@ export async function listPublicWorkFeedPosts(
   const hasNext = postIds.length > PAGE_SIZE;
 
   return {
-    data: sorted.map((row) => mapRowToPost(row, viewerProfileId)),
+    data: sorted.map((row) => mapRowToPost(row, resolvedViewerProfileId)),
     hasNext,
   };
 }
@@ -191,9 +194,12 @@ export async function listPostsForCreatorProfile(
 export async function listPublicPostsForCreatorProfile(
   supabase: SupabaseClient,
   creatorProfileId: string,
-  viewerContext?: { isFollowing?: boolean; isSelf?: boolean }
+  viewerContext?: { isFollowing?: boolean; isSelf?: boolean },
+  viewerProfileId?: string | null
 ): Promise<CreatorPostWithDetails[]> {
-  const viewerProfileId = await getViewerProfileId(supabase);
+  const resolvedViewerProfileId = viewerProfileId !== undefined
+    ? viewerProfileId
+    : await getViewerProfileId(supabase);
   const allowedVisibilities = ['public'];
   if (viewerContext?.isSelf || viewerContext?.isFollowing) {
     allowedVisibilities.push('followers');
@@ -227,7 +233,7 @@ export async function listPublicPostsForCreatorProfile(
 
   if (error) throw new Error(`Failed to fetch public posts: ${error.message}`);
 
-  return ((data ?? []) as any[]).map((row) => mapRowToPost(row, viewerProfileId));
+  return ((data ?? []) as any[]).map((row) => mapRowToPost(row, resolvedViewerProfileId));
 }
 
 // ---------------------------------------------------------------------------

@@ -14,14 +14,14 @@ async function main() {
   await client.connect();
   console.log('Connected to Supabase Postgres!');
 
-  const sqlPath = path.join(__dirname, 'supabase', 'migrations', '061_post_like_save_rls_fix.sql');
+  const sqlPath = path.join(__dirname, 'supabase', 'migrations', '068_creator_system_rls_fixes.sql');
   const sql = fs.readFileSync(sqlPath, 'utf8');
 
   try {
     await client.query(sql);
-    console.log('Successfully applied migration 061!');
+    console.log('Successfully applied migration 068!');
   } catch (err) {
-    console.error('Failed to apply migration 061:', err);
+    console.error('Failed to apply migration 068:', err);
   } finally {
     await client.end();
   }

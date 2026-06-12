@@ -303,6 +303,53 @@ export async function isPostLikedByUser(
   }
 }
 
+async function checkPostEngagementAllowed(
+  supabase: SupabaseClient,
+  post: CreatorPost,
+  profileId: string
+): Promise<void> {
+  if (post.deleted_at) {
+    throw new Error('Post not found or unavailable');
+  }
+
+  // 1. If public & approved, anyone can engage
+  if (post.visibility === 'public') {
+    if (post.moderation_status === 'approved') {
+      return;
+    }
+  }
+
+  // Resolve post creator's user profile ID
+  const { data: creator } = await supabase
+    .from('creator_profiles')
+    .select('user_id')
+    .eq('id', post.creator_profile_id)
+    .maybeSingle();
+
+  const isOwner = creator && creator.user_id === profileId;
+  if (isOwner) {
+    return;
+  }
+
+  // 2. If followers-only & approved, check if following
+  if (post.visibility === 'followers' && post.moderation_status === 'approved') {
+    if (creator) {
+      const { data: follow } = await supabase
+        .from('profile_follows')
+        .select('id')
+        .eq('follower_profile_id', profileId)
+        .eq('following_profile_id', creator.user_id)
+        .maybeSingle();
+      if (follow) {
+        return;
+      }
+    }
+  }
+
+  // Otherwise, deny
+  throw new Error('Post not found or unavailable');
+}
+
 export async function toggleLikePost(
   supabase: SupabaseClient,
   postId: string
@@ -310,9 +357,10 @@ export async function toggleLikePost(
   const profile = await resolveActiveProfile(supabase);
 
   const post = await getPostById(supabase, postId);
-  if (!post || post.deleted_at || post.visibility !== 'public' || post.moderation_status !== 'approved') {
+  if (!post) {
     throw new Error('Post not found or unavailable');
   }
+  await checkPostEngagementAllowed(supabase, post, profile.id);
 
   const alreadyLiked = await isPostLiked(supabase, profile.id, postId);
 
@@ -352,9 +400,10 @@ export async function toggleSavePost(
   const profile = await resolveActiveProfile(supabase);
 
   const post = await getPostById(supabase, postId);
-  if (!post || post.deleted_at || post.visibility !== 'public' || post.moderation_status !== 'approved') {
+  if (!post) {
     throw new Error('Post not found or unavailable');
   }
+  await checkPostEngagementAllowed(supabase, post, profile.id);
 
   const alreadySaved = await isPostSaved(supabase, profile.id, postId);
 
@@ -396,9 +445,10 @@ export async function addCommentToPost(
   }
 
   const post = await getPostById(supabase, postId);
-  if (!post || post.deleted_at || post.visibility !== 'public' || post.moderation_status !== 'approved') {
+  if (!post) {
     throw new Error('Post not found or unavailable');
   }
+  await checkPostEngagementAllowed(supabase, post, profile.id);
 
   return await addPostComment(supabase, profile.id, postId, body.trim());
 }

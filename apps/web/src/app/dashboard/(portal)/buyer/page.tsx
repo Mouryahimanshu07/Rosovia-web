@@ -12,15 +12,15 @@ import {
   Compass,
   Settings
 } from 'lucide-react';
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile, getUnreadMessageCountForCurrentUser } from '@rosovia/api';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
+import { getUnreadMessageCountForCurrentUser } from '@rosovia/api';
 import { DashboardShell } from '@rosovia/ui';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BuyerDashboardPage() {
+  const profile = await getServerProfile();
   const supabase = createWebServerClient();
-  const profile = await getCurrentProfile(supabase);
 
   if (!profile) redirect('/login');
   if (profile.status !== 'active') redirect('/login?error=account_suspended');
@@ -41,7 +41,7 @@ export default async function BuyerDashboardPage() {
     supabase.from('custom_orders').select('*', { count: 'exact', head: true }).eq('buyer_id', profile.id),
     supabase.from('inquiries').select('*', { count: 'exact', head: true }).eq('buyer_id', profile.id),
     supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('buyer_id', profile.id),
-    supabase.from('creator_follows').select('*', { count: 'exact', head: true }).eq('follower_profile_id', profile.id),
+    supabase.from('profile_follows').select('*', { count: 'exact', head: true }).eq('follower_profile_id', profile.id),
     getUnreadMessageCountForCurrentUser(supabase).catch(() => 0)
   ]);
 
@@ -171,7 +171,7 @@ export default async function BuyerDashboardPage() {
 
           {/* New Messages */}
           <Link
-            href="/dashboard/messages"
+            href="/messages"
             className="rounded-2xl border border-slate-200 bg-white p-5 hover:border-slate-300 hover:bg-slate-50/40 transition-all duration-300 block text-left shadow-sm"
           >
             <div className="flex items-center justify-between">
@@ -211,7 +211,7 @@ export default async function BuyerDashboardPage() {
                 <User className="h-4 w-4 text-slate-400 group-hover:text-indigo-650 transition" />
               </Link>
               <Link
-                href="/dashboard/messages"
+                href="/messages"
                 className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-600 shadow-sm group"
               >
                 <span>Check Inbox</span>

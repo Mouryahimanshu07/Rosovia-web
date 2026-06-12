@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile, getDashboardRedirectPath } from '@rosovia/api';
+import { getServerProfile } from '~/lib/supabase/server';
+import { getDashboardRedirectPath } from '@rosovia/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,8 +11,7 @@ export const dynamic = 'force-dynamic';
  * Admin    → /dashboard/admin
  */
 export default async function DashboardEntryPage() {
-  const supabase = createWebServerClient();
-  const profile = await getCurrentProfile(supabase);
+  const profile = await getServerProfile();
 
   if (!profile) redirect('/login');
 

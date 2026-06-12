@@ -22,6 +22,9 @@ interface MessagesPageProps {
     role?: 'buyer' | 'creator';
     creator?: string;
     user?: string;
+    listing?: string;
+    order?: string;
+    inquiry?: string;
   };
 }
 
@@ -36,7 +39,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
   if (searchParams.user) {
     try {
       if (searchParams.user === profile.id) {
-        redirect('/dashboard/messages?error=cannot_message_self');
+        redirect('/messages?error=cannot_message_self');
       }
 
       // Check target profile
@@ -79,25 +82,50 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
 
         if (buyerId && creatorId) {
           // Check if conversation exists
-          const { data: existing } = await supabase
+          let query = supabase
             .from('conversations')
             .select('id')
             .eq('buyer_id', buyerId)
             .eq('creator_id', creatorId)
-            .is('deleted_at', null)
-            .maybeSingle();
+            .is('deleted_at', null);
+
+          if (searchParams.order) {
+            query = query.eq('order_id', searchParams.order);
+          } else {
+            query = query.is('order_id', null);
+          }
+
+          if (searchParams.inquiry) {
+            query = query.eq('inquiry_id', searchParams.inquiry);
+          } else {
+            query = query.is('inquiry_id', null);
+          }
+
+          if (searchParams.listing) {
+            query = query.eq('listing_id', searchParams.listing);
+          } else {
+            query = query.is('listing_id', null);
+          }
+
+          const { data: existing } = await query.maybeSingle();
 
           if (existing) {
-            redirect(`/dashboard/messages?id=${existing.id}${searchParams.role ? `&role=${searchParams.role}` : ''}`);
+            redirect(`/messages?id=${existing.id}${searchParams.role ? `&role=${searchParams.role}` : ''}`);
           } else {
             const { data: newConvo, error: createError } = await supabase
               .from('conversations')
-              .insert({ buyer_id: buyerId, creator_id: creatorId })
+              .insert({ 
+                buyer_id: buyerId, 
+                creator_id: creatorId,
+                listing_id: searchParams.listing || null,
+                order_id: searchParams.order || null,
+                inquiry_id: searchParams.inquiry || null
+              })
               .select('id')
               .single();
 
             if (!createError && newConvo) {
-              redirect(`/dashboard/messages?id=${newConvo.id}${searchParams.role ? `&role=${searchParams.role}` : ''}`);
+              redirect(`/messages?id=${newConvo.id}${searchParams.role ? `&role=${searchParams.role}` : ''}`);
             }
           }
         }
@@ -112,8 +140,11 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
     try {
       const convo = await getOrCreateConversationForCurrentUser(supabase, {
         creatorId: searchParams.creator,
+        listingId: searchParams.listing || null,
+        orderId: searchParams.order || null,
+        inquiryId: searchParams.inquiry || null,
       });
-      redirect(`/dashboard/messages?id=${convo.id}${searchParams.role ? `&role=${searchParams.role}` : ''}`);
+      redirect(`/messages?id=${convo.id}${searchParams.role ? `&role=${searchParams.role}` : ''}`);
     } catch (err) {
       console.error('Failed to get/create conversation for creator entry point:', err);
     }

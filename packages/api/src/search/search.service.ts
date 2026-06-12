@@ -35,7 +35,8 @@ import { listPublicProfiles } from '../profiles/profile.repository';
 
 export async function getExplorePageData(
   supabase: SupabaseClient,
-  rawParams: Record<string, string | string[] | undefined> = {}
+  rawParams: Record<string, string | string[] | undefined> = {},
+  viewerProfileId?: string | null
 ): Promise<{
   categories: DbCategory[];
   listings: PaginatedResult<ListingWithDetails>;
@@ -72,15 +73,19 @@ export async function getExplorePageData(
     q
       ? searchPublicProfiles(supabase, { q, limit: 12 }).then((res) => res.data)
       : listPublicProfiles(supabase, { limit: 12 }),
-    listPublicWorkFeedPosts(supabase, {
-      page,
-      sort: sort as any,
-      category,
-      postType: postType as any,
-      type: (rawParams.type as any) || undefined,
-      verified: rawParams.verified === 'true' || (rawParams.verified as any) === true || undefined,
-      ...(q ? { q } : {}),
-    }),
+    listPublicWorkFeedPosts(
+      supabase,
+      {
+        page,
+        sort: sort as any,
+        category,
+        postType: postType as any,
+        type: (rawParams.type as any) || undefined,
+        verified: rawParams.verified === 'true' || (rawParams.verified as any) === true || undefined,
+        ...(q ? { q } : {}),
+      },
+      viewerProfileId
+    ),
   ]);
 
   return {

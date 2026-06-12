@@ -1,14 +1,12 @@
 import { redirect } from 'next/navigation';
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile } from '@rosovia/api';
+import { getServerProfile } from '~/lib/supabase/server';
 import { DashboardShell } from '@rosovia/ui';
 import { Shield, Bell, Key, UserCheck } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SettingsDashboardPage() {
-  const supabase = createWebServerClient();
-  const profile = await getCurrentProfile(supabase);
+  const profile = await getServerProfile();
 
   if (!profile) redirect('/login');
   if (profile.status !== 'active') redirect('/login?error=account_suspended');

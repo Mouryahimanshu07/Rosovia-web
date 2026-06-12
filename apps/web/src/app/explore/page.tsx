@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getExplorePageData, searchApprovedListings, getProfileByAuthUserId } from '@rosovia/api';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
+import { getExplorePageData, searchApprovedListings } from '@rosovia/api';
 import { ListingCard } from '~/components/listing/listing-card';
 import { CreatorProfileCard } from '~/components/creator/creator-profile-card';
 import { ProfileCard } from '~/components/profile/ProfileCard';
@@ -25,12 +25,12 @@ interface ExplorePageProps {
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const supabase = createWebServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const profile = user ? await getProfileByAuthUserId(supabase, user.id) : null;
+  const profile = await getServerProfile();
 
   const { categories, creators, people, workFeed, q } = await getExplorePageData(
     supabase,
-    searchParams as Record<string, string | string[] | undefined>
+    searchParams as Record<string, string | string[] | undefined>,
+    profile?.id ?? null
   );
 
   const activeTab = searchParams.tab ?? 'work';

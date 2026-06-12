@@ -46,7 +46,7 @@ export function SidebarNav({ role, username, dashboardPath, unreadMessagesCount 
     },
     {
       label: 'Messages',
-      href: '/dashboard/messages',
+      href: '/messages',
       icon: MessageSquare,
       visible: true,
       badge: unreadMessagesCount > 0 ? unreadMessagesCount : undefined

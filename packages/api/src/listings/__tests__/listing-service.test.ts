@@ -180,6 +180,7 @@ describe('Listings Service Layer Permission and Ownership Tests', () => {
       vi.mocked(getListingById).mockResolvedValueOnce({
         id: LISTING_ID,
         creator_id: CREATOR_PROFILE_ID,
+        title: 'suspicious spam listing',
         status: 'draft',
       } as any);
 

@@ -1,14 +1,17 @@
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@rosovia/integrations';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { cache } from 'react';
+import { getCurrentProfile } from '@rosovia/api';
+import type { Profile } from '@rosovia/core';
 
 /**
  * Next.js App Router specific Supabase server client.
+ * Memoized per-request using React cache.
  * Uses next/headers cookies — safe for Server Components, Server Actions, Route Handlers.
  * Never exposes service role key.
  */
-import type { SupabaseClient } from '@supabase/supabase-js';
-
-export function createWebServerClient(): SupabaseClient {
+export const createWebServerClient = cache((): SupabaseClient => {
   const cookieStore = cookies();
   return createSupabaseServerClient(
     (name) => cookieStore.get(name)?.value,
@@ -27,4 +30,13 @@ export function createWebServerClient(): SupabaseClient {
       }
     }
   );
-}
+});
+
+/**
+ * Retrieves the current authenticated user's profile on the server side.
+ * Memoized per-request using React cache to prevent duplicate database queries.
+ */
+export const getServerProfile = cache(async (): Promise<Profile | null> => {
+  const supabase = createWebServerClient();
+  return getCurrentProfile(supabase);
+});

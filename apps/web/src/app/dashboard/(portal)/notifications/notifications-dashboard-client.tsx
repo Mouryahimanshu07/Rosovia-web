@@ -101,7 +101,7 @@ export function NotificationsDashboardClient({
     const { type, entity_id } = notification;
     switch (type) {
       case 'message_received':
-        return `/dashboard/messages?id=${entity_id}&role=${role}`;
+        return `/messages?id=${entity_id}&role=${role}`;
       case 'inquiry_received':
         return `/dashboard/creator/inquiries`;
       case 'inquiry_replied':

@@ -263,20 +263,28 @@ export function CreatorPostCard({
 
           {/* Owner Dashboard Actions */}
           {isOwnDashboard ? (
-            <div className="mt-auto pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+            <div className="mt-auto pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setIsLightboxOpen(true)}
-                className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-gray-50 hover:bg-gray-105 border border-gray-200 text-xs font-bold text-gray-700 transition active:scale-95"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-50 hover:bg-gray-100 border border-gray-200 text-xs font-bold text-gray-700 transition active:scale-95 mr-auto"
               >
                 <Eye className="h-3.5 w-3.5" />
                 View
               </button>
+              {post.creator_profile_username && (
+                <Link
+                  href={`/u/${post.creator_profile_username}/posts/${post.id}/edit`}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-50 hover:bg-gray-100 border border-gray-200 text-xs font-bold text-gray-700 transition active:scale-95"
+                >
+                  Edit
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={handleDeleteClick}
                 disabled={isDeleting}
-                className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-red-500/10 hover:bg-red-50 border border-red-100 text-xs font-bold text-red-700 transition active:scale-95 disabled:opacity-50"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-500/10 hover:bg-red-50 border border-red-100 text-xs font-bold text-red-700 transition active:scale-95 disabled:opacity-50"
               >
                 {isDeleting ? (
                   <>
@@ -304,7 +312,7 @@ export function CreatorPostCard({
                   {post.like_count.toLocaleString()}
                 </span>
                 <Link
-                  href={`/dashboard/messages?creator=${post.creator_profile_id}`}
+                  href={`/messages?creator=${post.creator_profile_id}`}
                   className="flex items-center gap-1 text-gray-400 hover:text-indigo-600 transition-colors ml-1"
                   title="Ask Creator about this"
                 >

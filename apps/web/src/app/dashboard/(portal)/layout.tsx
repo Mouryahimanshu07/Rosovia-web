@@ -6,8 +6,8 @@ import {
   MessageSquare
 } from 'lucide-react';
 
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile, getDashboardRedirectPath, getUnreadCountForCurrentUser, getUnreadMessageCountForCurrentUser } from '@rosovia/api';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
+import { getDashboardRedirectPath, getUnreadCountForCurrentUser, getUnreadMessageCountForCurrentUser } from '@rosovia/api';
 import { SidebarNav } from './sidebar-nav';
 import { DashboardSearchInput } from '~/components/dashboard/DashboardSearchInput';
 
@@ -18,8 +18,8 @@ interface DashboardLayoutProps {
 }
 
 export default async function DashboardLayout({ children }: DashboardLayoutProps) {
+  const profile = await getServerProfile();
   const supabase = createWebServerClient();
-  const profile = await getCurrentProfile(supabase);
 
   if (!profile) redirect('/login');
   if (profile.status !== 'active') redirect('/login?error=account_suspended');
@@ -118,7 +118,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
             {/* Messages Shortcut */}
             <Link
-              href="/dashboard/messages"
+              href="/messages"
               className="relative p-1.5 text-slate-500 hover:text-slate-800 transition rounded-lg hover:bg-slate-100"
               title="Messages"
             >

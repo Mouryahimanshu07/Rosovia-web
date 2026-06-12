@@ -98,7 +98,7 @@ export function ProfileActionButtons({
 
       {isAuthenticated ? (
         <Link
-          href={`/dashboard/messages?user=${profileId}`}
+          href={`/messages?user=${profileId}`}
           id="message-btn"
           className={`${buttonBaseClass} bg-white border border-gray-200 text-gray-700 hover:bg-gray-50`}
         >

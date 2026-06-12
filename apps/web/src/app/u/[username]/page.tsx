@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { MapPin, Calendar } from 'lucide-react';
 
-import { createWebServerClient } from '~/lib/supabase/server';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
 import {
   getProfileByUsername,
   getProfileFollowStats,
@@ -43,48 +43,59 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function UserPublicProfilePage({ params }: Props) {
   const supabase = createWebServerClient();
   
-  // 1. Fetch base profile
-  const baseProfile = await getProfileByUsername(supabase, params.username);
-  if (!baseProfile) notFound();
-
-  // 2. Fetch authenticated session and resolve current user's profile
-  const { data: { user } } = await supabase.auth.getUser();
-  const currentUserProfile = user ? await getCurrentProfile(supabase) : null;
-  const isOwnProfile = currentUserProfile !== null && currentUserProfile.id === baseProfile.id;
-
-  // 3. Fetch follow status and counts
-  const [followStats, initialFollowing] = await Promise.all([
-    getProfileFollowStats(supabase, baseProfile.id),
-    user ? isCurrentUserFollowingProfile(supabase, baseProfile.id) : Promise.resolve(false),
+  // 1. Fetch base profile and current user profile in parallel (request-memoized)
+  const [baseProfile, currentUserProfile] = await Promise.all([
+    getProfileByUsername(supabase, params.username),
+    getServerProfile(),
   ]);
 
-  // 4. Fetch creator profile check
+  if (!baseProfile) notFound();
+
+  const user = currentUserProfile;
+  const isOwnProfile = currentUserProfile !== null && currentUserProfile.id === baseProfile.id;
+
+  // 2. Fetch follow status/counts and creator profile check in parallel
   const isCreator = baseProfile.role === 'creator';
+  let creatorProfilePromise: Promise<any> = Promise.resolve(null);
+
+  if (isCreator) {
+    creatorProfilePromise = Promise.resolve(
+      supabase
+        .from('creator_profiles')
+        .select('*, categories(name, slug)')
+        .eq('user_id', baseProfile.id)
+        .is('deleted_at', null)
+        .maybeSingle()
+        .then(async ({ data: rawCreatorProfile }) => {
+          if (!rawCreatorProfile) {
+            try {
+              await ensureCreatorProfileForProfile(supabase, baseProfile.id);
+              const { data: rawEnsured } = await supabase
+                .from('creator_profiles')
+                .select('*, categories(name, slug)')
+                .eq('user_id', baseProfile.id)
+                .is('deleted_at', null)
+                .maybeSingle();
+              return rawEnsured;
+            } catch (err) {
+              console.error('Failed to ensure creator profile on page load:', err);
+              return null;
+            }
+          }
+          return rawCreatorProfile;
+        })
+    );
+  }
+
+  const [followStats, initialFollowing, rawCreatorProfile] = await Promise.all([
+    getProfileFollowStats(supabase, baseProfile.id),
+    currentUserProfile ? isCurrentUserFollowingProfile(supabase, baseProfile.id) : Promise.resolve(false),
+    creatorProfilePromise,
+  ]);
+
   let creatorProfile: CreatorProfileWithCategory | null = null;
 
   if (isCreator) {
-    let { data: rawCreatorProfile } = await supabase
-      .from('creator_profiles')
-      .select('*, categories(name, slug)')
-      .eq('user_id', baseProfile.id)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (!rawCreatorProfile) {
-      try {
-        await ensureCreatorProfileForProfile(supabase, baseProfile.id);
-        const { data: rawEnsured } = await supabase
-          .from('creator_profiles')
-          .select('*, categories(name, slug)')
-          .eq('user_id', baseProfile.id)
-          .is('deleted_at', null)
-          .maybeSingle();
-        rawCreatorProfile = rawEnsured;
-      } catch (err) {
-        console.error('Failed to ensure creator profile on page load:', err);
-      }
-    }
-
     if (rawCreatorProfile) {
       creatorProfile = {
         ...rawCreatorProfile,
@@ -127,7 +138,7 @@ export default async function UserPublicProfilePage({ params }: Props) {
     }
   }
 
-  // 5. Query creator-only tabs data in parallel if profile is creator
+  // 3. Query creator-only tabs data in parallel if profile is creator
   let creatorTabsData = null;
   if (creatorProfile) {
     const [reviews, listings, portfolioMedia, collections, workPosts] = await Promise.all([
@@ -135,10 +146,15 @@ export default async function UserPublicProfilePage({ params }: Props) {
       listCreatorPublicListings(supabase, creatorProfile.id),
       listCreatorPublicPortfolioMedia(supabase, baseProfile.id),
       listCollectionsForPublicProfile(supabase, creatorProfile.id),
-      listPublicPostsForCreatorProfile(supabase, creatorProfile.id, {
-        isFollowing: initialFollowing,
-        isSelf: !!isOwnProfile,
-      }),
+      listPublicPostsForCreatorProfile(
+        supabase,
+        creatorProfile.id,
+        {
+          isFollowing: initialFollowing,
+          isSelf: !!isOwnProfile,
+        },
+        currentUserProfile?.id
+      ),
     ]);
 
     const services = listings.filter((l: ListingWithDetails) =>

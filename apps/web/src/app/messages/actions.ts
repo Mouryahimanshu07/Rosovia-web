@@ -10,6 +10,7 @@ import {
   togglePinConversation,
   updateMuteConversation,
   createCurrentUserReport,
+  markMessagesAsRead,
 } from '@rosovia/api';
 import { messageSendSchema, conversationCreateSchema } from '@rosovia/core';
 import { headers } from 'next/headers';
@@ -50,7 +51,7 @@ export async function sendMessageAction(
       body: parsed.data.body,
       attachmentUrl: parsed.data.attachmentUrl,
     });
-    revalidatePath(`/dashboard/messages`);
+    revalidatePath(`/messages`);
     return { success: true };
   } catch (err) {
     return {
@@ -63,9 +64,10 @@ export async function sendMessageAction(
 export async function startConversationAction(
   creatorId: string,
   orderId?: string | null,
-  inquiryId?: string | null
+  inquiryId?: string | null,
+  listingId?: string | null
 ): Promise<ActionResult<string>> {
-  const parsed = conversationCreateSchema.safeParse({ creatorId, orderId, inquiryId });
+  const parsed = conversationCreateSchema.safeParse({ creatorId, orderId, inquiryId, listingId });
   if (!parsed.success) {
     return {
       success: false,
@@ -79,14 +81,42 @@ export async function startConversationAction(
       creatorId: parsed.data.creatorId,
       orderId: parsed.data.orderId,
       inquiryId: parsed.data.inquiryId,
+      listingId: parsed.data.listingId,
     });
     
-    revalidatePath(`/dashboard/messages`);
+    revalidatePath(`/messages`);
     return { success: true, data: conversation.id };
   } catch (err) {
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to start conversation',
+    };
+  }
+}
+
+export async function markConversationMessagesAsReadAction(
+  conversationId: string
+): Promise<ActionResult> {
+  try {
+    const supabase = createWebServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Not authenticated' };
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (!profile) return { success: false, error: 'Profile not found' };
+
+    await markMessagesAsRead(supabase, conversationId, profile.id);
+    revalidatePath('/messages');
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to mark messages as read',
     };
   }
 }
@@ -223,7 +253,7 @@ export async function generateCustomOfferAction(
       body,
     });
 
-    revalidatePath(`/dashboard/messages`);
+    revalidatePath(`/messages`);
     return { success: true };
   } catch (err) {
     return {
@@ -245,7 +275,7 @@ export async function acceptAndCreateCustomOfferOrderAction(
     // 2. Create standard marketplace order atomically (which registers in public.orders)
     const order = await createOrderFromAcceptedCustomOrder(supabase, { customOrderId });
 
-    revalidatePath(`/dashboard/messages`);
+    revalidatePath(`/messages`);
     return { success: true, data: order.id };
   } catch (err) {
     return {
@@ -273,7 +303,7 @@ export async function archiveConversationAction(
     if (!profile) return { success: false, error: 'Profile not found' };
 
     await toggleArchiveConversation(supabase, conversationId, profile.id, archive);
-    revalidatePath(`/dashboard/messages`);
+    revalidatePath(`/messages`);
     return { success: true };
   } catch (err) {
     return {
@@ -301,7 +331,7 @@ export async function pinConversationAction(
     if (!profile) return { success: false, error: 'Profile not found' };
 
     await togglePinConversation(supabase, conversationId, profile.id, pin);
-    revalidatePath(`/dashboard/messages`);
+    revalidatePath(`/messages`);
     return { success: true };
   } catch (err) {
     return {
@@ -329,7 +359,7 @@ export async function muteConversationAction(
     if (!profile) return { success: false, error: 'Profile not found' };
 
     await updateMuteConversation(supabase, conversationId, profile.id, until);
-    revalidatePath(`/dashboard/messages`);
+    revalidatePath(`/messages`);
     return { success: true };
   } catch (err) {
     return {
@@ -370,7 +400,7 @@ export async function blockUserAction(
       if (error) throw new Error(error.message);
     }
 
-    revalidatePath('/dashboard/messages');
+    revalidatePath('/messages');
     return { success: true };
   } catch (err) {
     return {
@@ -394,7 +424,7 @@ export async function reportMessageAction(
       description: description || undefined,
     });
 
-    revalidatePath('/dashboard/messages');
+    revalidatePath('/messages');
     return { success: true };
   } catch (err) {
     return {

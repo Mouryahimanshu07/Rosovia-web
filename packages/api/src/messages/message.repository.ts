@@ -33,7 +33,8 @@ export async function getConversationByParticipants(
   buyerId: string,
   creatorId: string,
   orderId?: string | null,
-  inquiryId?: string | null
+  inquiryId?: string | null,
+  listingId?: string | null
 ): Promise<Conversation | null> {
   let query = supabase
     .from('conversations')
@@ -54,6 +55,12 @@ export async function getConversationByParticipants(
     query = query.is('inquiry_id', null);
   }
 
+  if (listingId) {
+    query = query.eq('listing_id', listingId);
+  } else {
+    query = query.is('listing_id', null);
+  }
+
   const { data, error } = await query.maybeSingle();
 
   if (error) {
@@ -70,7 +77,7 @@ export async function listConversationsForProfile(
   // 1. Fetch conversations
   let query = supabase
     .from('conversations')
-    .select('*, profiles!buyer_id ( full_name, username ), creator_profiles ( display_name, slug ), listings ( title, cover_image_url ), custom_orders ( status, creator_quote_amount )')
+    .select('*, profiles!buyer_id ( full_name, username ), creator_profiles ( display_name, slug ), listings ( title, cover_image_url ), custom_orders!custom_order_id ( status, creator_quote_amount )')
     .is('deleted_at', null);
 
   if (isCreator === true) {
@@ -100,53 +107,71 @@ export async function listConversationsForProfile(
     .select('*')
     .eq('profile_id', profileId);
 
-  // 2. Fetch last messages & unread counts for all active conversations in parallel
-  const enriched: ConversationWithDetails[] = await Promise.all(
-    conversations.map(async (c: any) => {
-      // Get the last message
-      const { data: lastMsg } = await supabase
-        .from('messages')
-        .select('body, sender_profile_id, attachment_url')
-        .eq('conversation_id', c.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+  // 2. Fetch last messages & unread counts for all active conversations in bulk
+  const conversationIds = conversations.map((c: any) => c.id);
+  const lastMessageTimestamps = conversations
+    .map((c: any) => c.last_message_at)
+    .filter(Boolean);
 
-      // Calculate unread count (messages where sender is NOT this profileId and read_at is null)
-      const { count } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('conversation_id', c.id)
-        .neq('sender_profile_id', profileId)
-        .is('read_at', null)
-        .is('deleted_at', null);
+  let lastMessages: any[] = [];
+  if (lastMessageTimestamps.length > 0) {
+    const { data: messagesData } = await supabase
+      .from('messages')
+      .select('conversation_id, body, sender_profile_id, attachment_url, created_at')
+      .in('created_at', lastMessageTimestamps)
+      .is('deleted_at', null);
+    if (messagesData) {
+      lastMessages = messagesData;
+    }
+  }
 
-      const participant = participantsData?.find((p: any) => p.conversation_id === c.id);
+  const lastMessageMap: Record<string, any> = {};
+  for (const msg of lastMessages) {
+    lastMessageMap[msg.conversation_id] = msg;
+  }
 
-      return {
-        ...c,
-        buyer_full_name: c.profiles?.full_name ?? null,
-        buyer_username: c.profiles?.username ?? null,
-        creator_display_name: c.creator_profiles?.display_name ?? null,
-        creator_slug: c.creator_profiles?.slug ?? null,
-        last_message_body: lastMsg?.body ?? (lastMsg?.attachment_url ? 'Sent an attachment' : null),
-        last_message_sender_id: lastMsg?.sender_profile_id ?? null,
-        unread_count: count ?? 0,
-        // New context flags from participants
-        is_archived: participant?.archived_at != null,
-        is_pinned: participant?.pinned_at != null,
-        muted_until: participant?.muted_until ?? null,
-        last_read_at: participant?.last_read_at ?? null,
-        role_in_conversation: participant?.role ?? 'participant',
-        // Context details
-        listing_title: c.listings?.title ?? null,
-        listing_image_url: c.listings?.cover_image_url ?? null,
-        custom_order_status: c.custom_orders?.status ?? null,
-        custom_order_price: c.custom_orders?.creator_quote_amount ?? null,
-      };
-    })
-  );
+  const { data: unreadCountsData } = await supabase
+    .from('messages')
+    .select('conversation_id')
+    .in('conversation_id', conversationIds)
+    .neq('sender_profile_id', profileId)
+    .is('read_at', null)
+    .is('deleted_at', null);
+
+  const unreadCountMap: Record<string, number> = {};
+  if (unreadCountsData) {
+    for (const msg of unreadCountsData) {
+      unreadCountMap[msg.conversation_id] = (unreadCountMap[msg.conversation_id] || 0) + 1;
+    }
+  }
+
+  const enriched: ConversationWithDetails[] = conversations.map((c: any) => {
+    const lastMsg = lastMessageMap[c.id];
+    const count = unreadCountMap[c.id] ?? 0;
+    const participant = participantsData?.find((p: any) => p.conversation_id === c.id);
+
+    return {
+      ...c,
+      buyer_full_name: c.profiles?.full_name ?? null,
+      buyer_username: c.profiles?.username ?? null,
+      creator_display_name: c.creator_profiles?.display_name ?? null,
+      creator_slug: c.creator_profiles?.slug ?? null,
+      last_message_body: lastMsg?.body ?? (lastMsg?.attachment_url ? 'Sent an attachment' : null),
+      last_message_sender_id: lastMsg?.sender_profile_id ?? null,
+      unread_count: count,
+      // New context flags from participants
+      is_archived: participant?.archived_at != null,
+      is_pinned: participant?.pinned_at != null,
+      muted_until: participant?.muted_until ?? null,
+      last_read_at: participant?.last_read_at ?? null,
+      role_in_conversation: participant?.role ?? 'participant',
+      // Context details
+      listing_title: c.listings?.title ?? null,
+      listing_image_url: c.listings?.cover_image_url ?? null,
+      custom_order_status: c.custom_orders?.status ?? null,
+      custom_order_price: c.custom_orders?.creator_quote_amount ?? null,
+    };
+  });
 
   return enriched;
 }
@@ -158,6 +183,7 @@ export async function createConversation(
     creator_id: string;
     order_id?: string | null;
     inquiry_id?: string | null;
+    listing_id?: string | null;
   }
 ): Promise<Conversation> {
   const { data: created, error } = await supabase
@@ -167,6 +193,7 @@ export async function createConversation(
       creator_id: data.creator_id,
       order_id: data.order_id ?? null,
       inquiry_id: data.inquiry_id ?? null,
+      listing_id: data.listing_id ?? null,
       last_message_at: null,
     })
     .select('*')

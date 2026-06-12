@@ -165,7 +165,19 @@ export async function submitCurrentCreatorListingForReview(
     throw new Error(`Cannot submit a listing with status "${listing.status}" for review. Only drafts can be submitted.`);
   }
 
-  const updatedListing = await updateListingStatus(supabase, listingId, 'pending_review');
+  const title = (listing.title || '').toLowerCase();
+  const description = (listing.description ?? '').toLowerCase();
+  const suspiciousKeywords = ['spam', 'fraud', 'suspicious', 'scam'];
+  const isSuspicious = suspiciousKeywords.some(keyword => title.includes(keyword) || description.includes(keyword));
+
+  let updatedListing: Listing;
+  if (isSuspicious) {
+    updatedListing = await updateListingStatus(supabase, listingId, 'pending_review');
+  } else {
+    const { master: serviceRoleClient } = getDatabaseClients();
+    updatedListing = await updateListingStatus(serviceRoleClient, listingId, 'approved');
+  }
+
   await cacheHelpers.del(`listing:detail:${updatedListing.slug}`);
   return updatedListing;
 }
@@ -205,7 +217,7 @@ export async function restoreCurrentCreatorListingToDraft(
   return updatedListing;
 }
 
-import { cacheHelpers } from '@rosovia/integrations';
+import { cacheHelpers, getDatabaseClients } from '@rosovia/integrations';
 
 export async function getPublicListingBySlug(
   supabase: SupabaseClient,

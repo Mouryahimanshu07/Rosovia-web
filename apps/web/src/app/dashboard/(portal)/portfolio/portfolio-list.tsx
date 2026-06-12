@@ -128,19 +128,27 @@ export function PortfolioList({ initialItems }: PortfolioListProps) {
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   {isVideo ? 'Video' : 'Image'}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(item.id)}
-                  disabled={deletingId === item.id}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 transition active:scale-95"
-                >
-                  {deletingId === item.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                  Delete
-                </button>
+                <div className="flex items-center gap-3">
+                  <a
+                    href={`/dashboard/portfolio/${item.id}/edit`}
+                    className="inline-flex items-center text-xs font-semibold text-gray-600 hover:text-gray-900 transition active:scale-95"
+                  >
+                    Edit
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item.id)}
+                    disabled={deletingId === item.id}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 transition active:scale-95"
+                  >
+                    {deletingId === item.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
           </div>

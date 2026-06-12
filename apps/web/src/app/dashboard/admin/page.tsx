@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile, getAdminDashboardOverview, getMarketplaceKpiOverview } from '@rosovia/api';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
+import { getAdminDashboardOverview, getMarketplaceKpiOverview } from '@rosovia/api';
 import { AdminStatCard } from '~/components/admin/admin-stat-card';
 import { MarketplaceKpiCard } from '~/components/admin/marketplace-kpi-card';
 
@@ -11,8 +11,8 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminDashboardPage() {
+  const profile = await getServerProfile();
   const supabase = createWebServerClient();
-  const profile = await getCurrentProfile(supabase);
 
   if (!profile) redirect('/login');
   if (profile.status !== 'active') redirect('/login?error=account_suspended');

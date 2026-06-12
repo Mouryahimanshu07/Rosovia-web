@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, Settings } from 'lucide-react';
-import { createWebServerClient } from '~/lib/supabase/server';
-import { getCurrentProfile, getCurrentCreatorProfile } from '@rosovia/api';
+import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
+import { getCurrentCreatorProfile } from '@rosovia/api';
 import type { DbCategory } from '@rosovia/core';
 import { ProfileForm } from '~/components/forms/profile-form';
 
@@ -33,9 +33,8 @@ async function getActiveCategories(
 }
 
 export default async function EditProfilePage({ params }: Props) {
+  const profile = await getServerProfile();
   const supabase = createWebServerClient();
-
-  const profile = await getCurrentProfile(supabase);
   if (!profile) redirect('/login');
   if (profile.status !== 'active') redirect('/login?error=account_suspended');
 

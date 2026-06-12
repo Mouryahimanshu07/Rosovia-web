@@ -817,7 +817,7 @@ function InstagramPostCard({
           <button
             onClick={() => {
               if (isAnonymous) handleAuthRedirect();
-              else router.push(`/dashboard/messages?creator=${post.creator_profile_id}`);
+              else router.push(`/messages?creator=${post.creator_profile_id}`);
             }}
             className="flex-1 min-w-[100px] py-2 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm"
           >

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { startConversationAction } from '~/app/dashboard/(portal)/messages/actions';
+import { startConversationAction } from '~/app/messages/actions';
 
 interface MessageOrderPartyButtonProps {
   /** The creator profile ID (required to start/find the conversation). */
@@ -28,10 +28,10 @@ export function MessageOrderPartyButton({
       const result = await startConversationAction(creatorId, orderId ?? null, null);
       if (result.success && result.data) {
         const roleParam = viewAs === 'creator' ? '&role=creator' : '';
-        router.push(`/dashboard/messages?id=${result.data}${roleParam}`);
+        router.push(`/messages?id=${result.data}${roleParam}`);
       } else {
         // Fallback: navigate to inbox anyway
-        router.push('/dashboard/messages');
+        router.push('/messages');
       }
     });
   };
