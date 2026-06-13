@@ -96,7 +96,7 @@ export async function listConversationsForProfile(
       '*, ' +
       'profiles!conversations_buyer_id_fkey ( full_name, username ), ' +
       'creator_profiles ( display_name, slug ), ' +
-      'listings ( title, cover_image_url )'
+      'listings ( title )'
     )
     .is('deleted_at', null);
 
@@ -174,7 +174,32 @@ export async function listConversationsForProfile(
     }
   }
 
-  // ── Step 5: Custom order data ────────────────────────────────────────────
+  // ── Step 5a: Listing cover images ────────────────────────────────────────
+  // The listings table has no cover_image_url column — images live in
+  // media_assets. Fetch the first image asset for each linked listing.
+  const listingImageMap: Record<string, string | null> = {};
+  const listingIds = conversations
+    .map((c: any) => c.listing_id)
+    .filter(Boolean) as string[];
+  if (listingIds.length > 0) {
+    const { data: listingMediaData } = await supabase
+      .from('media_assets')
+      .select('listing_id, public_url')
+      .in('listing_id', listingIds)
+      .eq('media_type', 'image')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true });
+    if (listingMediaData) {
+      for (const asset of listingMediaData) {
+        // Keep only the first (earliest) image per listing
+        if (asset.listing_id && !listingImageMap[asset.listing_id]) {
+          listingImageMap[asset.listing_id] = asset.public_url ?? null;
+        }
+      }
+    }
+  }
+
+  // ── Step 5b: Custom order data ───────────────────────────────────────────
   // Query via custom_orders.conversation_id (the FK direction actually written
   // by custom-order.service.ts). This completely avoids the bidirectional FK
   // ambiguity that caused the original PostgREST error.
@@ -212,9 +237,9 @@ export async function listConversationsForProfile(
       muted_until: participant?.muted_until ?? null,
       last_read_at: participant?.last_read_at ?? null,
       role_in_conversation: participant?.role ?? 'participant',
-      // Listing context
+      // Listing context — image fetched from media_assets (listings has no cover_image_url column)
       listing_title: c.listings?.title ?? null,
-      listing_image_url: c.listings?.cover_image_url ?? null,
+      listing_image_url: c.listing_id ? (listingImageMap[c.listing_id] ?? null) : null,
       // Custom order context — fetched separately to avoid bidirectional FK ambiguity
       custom_order_status: customOrder?.status ?? null,
       custom_order_price: customOrder?.creator_quote_amount ?? null,

@@ -332,14 +332,28 @@ export function MessagesClient({
         async (payload: any) => {
           const { eventType, new: newConvo } = payload;
           if (eventType === 'INSERT') {
-            // New conversation started. Fetch details and append to sidebar list
+            // New conversation started. Fetch details and append to sidebar list.
+            // FIX: Do NOT embed custom_orders in this SELECT — migrations 043 and 065
+            // created two FK paths between conversations ↔ custom_orders in opposite
+            // directions, making PostgREST throw "Could not embed because more than one
+            // relationship was found". Fetch custom order data via a separate query
+            // using the canonical custom_orders.conversation_id FK instead.
             const { data: enriched } = await supabase
               .from('conversations')
-              .select('*, profiles!buyer_id ( full_name, username ), creator_profiles ( display_name, slug ), listings ( title, cover_image_url ), custom_orders ( status, creator_quote_amount )')
+              .select('*, profiles!conversations_buyer_id_fkey ( full_name, username ), creator_profiles ( display_name, slug ), listings ( title, cover_image_url )')
               .eq('id', newConvo.id)
               .single();
 
             if (enriched) {
+              // Fetch custom order separately via custom_orders.conversation_id to
+              // avoid the bidirectional FK ambiguity on the conversations table.
+              const { data: customOrder } = await supabase
+                .from('custom_orders')
+                .select('status, creator_quote_amount')
+                .eq('conversation_id', newConvo.id)
+                .is('deleted_at', null)
+                .maybeSingle();
+
               const enrichedConvo: ConversationWithDetails = {
                 ...enriched,
                 buyer_full_name: enriched.profiles?.full_name ?? null,
@@ -356,8 +370,9 @@ export function MessagesClient({
                 role_in_conversation: enriched.buyer_profile_id === profile.id ? 'buyer' : 'seller',
                 listing_title: enriched.listings?.title ?? null,
                 listing_image_url: enriched.listings?.cover_image_url ?? null,
-                custom_order_status: enriched.custom_orders?.status ?? null,
-                custom_order_price: enriched.custom_orders?.creator_quote_amount ?? null,
+                // Custom order data from the separate query
+                custom_order_status: customOrder?.status ?? null,
+                custom_order_price: customOrder?.creator_quote_amount ?? null,
               };
 
               setConversations((prev) => {
@@ -781,7 +796,7 @@ export function MessagesClient({
   };
 
   return (
-    <div className="grid grid-cols-12 h-[calc(100vh-8.5rem)] rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden text-slate-900 relative antialiased">
+    <div className="grid grid-cols-12 h-[calc(100vh-7.5rem)] md:h-[calc(100vh-10.5rem)] rounded-none border-0 md:rounded-3xl md:border md:border-slate-200 bg-white shadow-none md:shadow-2xl overflow-hidden text-slate-900 relative antialiased">
       
       {/* ── PANEL 1: CONVERSATION LIST (LEFT PANEL) ─────────────────────────── */}
       <div className={`col-span-12 md:col-span-4 flex flex-col border-r border-slate-200 bg-slate-50/30 relative z-10 ${activeId ? 'hidden md:flex' : 'flex'}`}>
@@ -1059,7 +1074,7 @@ export function MessagesClient({
                       } catch (e) {}
                     }
 
-                    const relativeTime = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const relativeTime = msgDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
                     // Consecutive messages spacing logic
                     const nextMsg = messages[index + 1];
@@ -1211,7 +1226,7 @@ export function MessagesClient({
                             </div>
                             
                             {/* Read receipts checkmarks */}
-                            <span className="mt-1 text-[8px] text-slate-450 px-1 font-bold flex items-center gap-1">
+                            <span suppressHydrationWarning className="mt-1 text-[8px] text-slate-450 px-1 font-bold flex items-center gap-1">
                               {relativeTime}
                               {isMe && (
                                 m.read_at ? (
@@ -1617,7 +1632,7 @@ export function MessagesClient({
       : c.buyer_full_name || c.buyer_username || 'Buyer';
     
     const relativeTime = c.last_message_at 
-      ? new Date(c.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      ? new Date(c.last_message_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
       : '';
 
     const initials = titleName.charAt(0).toUpperCase();
@@ -1651,7 +1666,7 @@ export function MessagesClient({
             <h4 className={`truncate text-xs font-bold ${c.unread_count > 0 ? 'text-indigo-650 font-black' : 'text-slate-800'}`}>
               {titleName}
             </h4>
-            <span className="text-[9px] font-bold text-slate-400 shrink-0">{relativeTime}</span>
+            <span suppressHydrationWarning className="text-[9px] font-bold text-slate-400 shrink-0">{relativeTime}</span>
           </div>
 
           <p className={`mt-1 truncate text-[11px] leading-relaxed ${

@@ -53,6 +53,11 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
       if (!targetError && targetProfile && targetProfile.status === 'active') {
         let buyerId: string | null = null;
         let creatorId: string | null = null;
+        // FIX: Track the seller's profile ID (creator_profiles.user_id) so we can
+        // populate seller_profile_id on conversations. Without this, the
+        // maintain_conversation_participants trigger (migration 065) receives NULL
+        // for seller_profile_id and silently skips inserting the seller participant row.
+        let sellerProfileId: string | null = null;
 
         if (targetProfile.role === 'creator') {
           const { data: targetCreator } = await supabase
@@ -65,6 +70,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
           if (targetCreator) {
             buyerId = profile.id;
             creatorId = targetCreator.id;
+            sellerProfileId = targetProfile.id; // creator's base profile ID
           }
         } else if (profile.role === 'creator') {
           const { data: myCreator } = await supabase
@@ -77,6 +83,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
           if (myCreator) {
             buyerId = targetProfile.id;
             creatorId = myCreator.id;
+            sellerProfileId = profile.id; // current user is the creator
           }
         }
 
@@ -119,7 +126,12 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
                 creator_id: creatorId,
                 listing_id: searchParams.listing || null,
                 order_id: searchParams.order || null,
-                inquiry_id: searchParams.inquiry || null
+                inquiry_id: searchParams.inquiry || null,
+                // FIX: Populate both profile ID columns so the
+                // maintain_conversation_participants trigger (migration 065)
+                // correctly inserts both participant rows.
+                buyer_profile_id: buyerId,
+                seller_profile_id: sellerProfileId,
               })
               .select('id')
               .single();
