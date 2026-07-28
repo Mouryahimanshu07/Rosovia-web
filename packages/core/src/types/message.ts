@@ -38,6 +38,8 @@ export interface ConversationWithDetails extends Conversation {
   listing_image_url?: string | null;
   custom_order_status?: string | null;
   custom_order_price?: number | null;
+  creator_primary_category_id?: string | null;
+  listing_category_id?: string | null;
 }
 
 export interface Message {

@@ -13,3 +13,16 @@
     color: var(--foreground);
   }
 }
+
+/* Messaging Page Viewport Lock & Footer Hide */
+html.messages-page-active,
+body.messages-page-active {
+  overflow: hidden !important;
+  height: 100dvh !important;
+  margin: 0;
+  padding: 0;
+}
+
+body.messages-page-active footer {
+  display: none !important;
+}

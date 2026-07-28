@@ -95,8 +95,8 @@ export async function listConversationsForProfile(
     .select(
       '*, ' +
       'profiles!conversations_buyer_id_fkey ( full_name, username ), ' +
-      'creator_profiles ( display_name, slug ), ' +
-      'listings ( title )'
+      'creator_profiles ( display_name, slug, user_id, primary_category_id ), ' +
+      'listings ( title, category_id )'
     )
     .is('deleted_at', null);
 
@@ -228,6 +228,9 @@ export async function listConversationsForProfile(
       buyer_username: c.profiles?.username ?? null,
       creator_display_name: c.creator_profiles?.display_name ?? null,
       creator_slug: c.creator_profiles?.slug ?? null,
+      creator_primary_category_id: c.creator_profiles?.primary_category_id ?? null,
+      listing_category_id: c.listings?.category_id ?? null,
+      seller_profile_id: c.seller_profile_id ?? c.creator_profiles?.user_id ?? null,
       last_message_body: lastMsg?.body ?? (lastMsg?.attachment_url ? 'Sent an attachment' : null),
       last_message_sender_id: lastMsg?.sender_profile_id ?? null,
       unread_count: count,

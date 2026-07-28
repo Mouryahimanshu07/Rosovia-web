@@ -33,7 +33,9 @@ import {
   Play,
   Pause,
   ChevronRight,
-  Info
+  ChevronDown,
+  ChevronUp,
+  LayoutList
 } from 'lucide-react';
 
 import type { ConversationWithDetails, MessageWithSender, Profile } from '@rosovia/core';
@@ -120,7 +122,6 @@ export function MessagesClient({
   const [playingAudioId, setPlayingAudioId] = React.useState<string | null>(null);
 
   // Panel Toggles
-  const [showRightDrawer, setShowRightDrawer] = React.useState(true);
   const [showMoreMenu, setShowMoreMenu] = React.useState(false);
 
   // Blocking and Moderation
@@ -130,13 +131,24 @@ export function MessagesClient({
   const [reportReason, setReportReason] = React.useState('spam');
   const [reportDesc, setReportDesc] = React.useState('');
   const [isReporting, setIsReporting] = React.useState(false);
+  const [isContextPanelOpen, setIsContextPanelOpen] = React.useState(false);
 
   // References
-  const messageEndRef = React.useRef<HTMLDivElement>(null);
+  const messagesContainerRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const composerTextareaRef = React.useRef<HTMLTextAreaElement>(null);
   const emojiPickerRef = React.useRef<HTMLDivElement>(null);
   const lastMessageIdRef = React.useRef<string | null>(null);
+
+  // Lock body overflow & hide footer on mount, restore on unmount
+  React.useEffect(() => {
+    document.documentElement.classList.add('messages-page-active');
+    document.body.classList.add('messages-page-active');
+    return () => {
+      document.documentElement.classList.remove('messages-page-active');
+      document.body.classList.remove('messages-page-active');
+    };
+  }, []);
 
   // Sync state if props change
   React.useEffect(() => {
@@ -175,21 +187,31 @@ export function MessagesClient({
 
   // ── SCROLL HELPER ─────────────────────────────────────────────────────────
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    if (messageEndRef.current) {
-      messageEndRef.current.scrollIntoView({ behavior });
+    if (messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior
+      });
+      setTimeout(() => {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior
+        });
+      }, 50);
     }
   };
 
   // Active Convo helper properties
   const activeConvo = conversations.find((c) => c.id === activeId);
-  const isBuyingActive = activeConvo?.buyer_profile_id === profile.id;
+  const isBuyingActive = activeConvo?.buyer_id === profile.id;
   
   const counterPartyName = activeConvo 
     ? (isBuyingActive ? activeConvo.creator_display_name || 'Creator' : activeConvo.buyer_full_name || activeConvo.buyer_username || 'Buyer')
     : '';
   
   const counterPartyProfileId = activeConvo
-    ? (isBuyingActive ? activeConvo.seller_profile_id : activeConvo.buyer_profile_id)
+    ? (isBuyingActive ? activeConvo.seller_profile_id : activeConvo.buyer_id)
     : '';
 
   const isCounterPartyOnline = counterPartyProfileId ? !!onlineUsers[counterPartyProfileId] : false;
@@ -340,7 +362,7 @@ export function MessagesClient({
             // using the canonical custom_orders.conversation_id FK instead.
             const { data: enriched } = await supabase
               .from('conversations')
-              .select('*, profiles!conversations_buyer_id_fkey ( full_name, username ), creator_profiles ( display_name, slug ), listings ( title, cover_image_url )')
+              .select('*, profiles!conversations_buyer_id_fkey ( full_name, username ), creator_profiles ( display_name, slug, user_id, primary_category_id ), listings ( title, cover_image_url, category_id )')
               .eq('id', newConvo.id)
               .single();
 
@@ -360,6 +382,9 @@ export function MessagesClient({
                 buyer_username: enriched.profiles?.username ?? null,
                 creator_display_name: enriched.creator_profiles?.display_name ?? null,
                 creator_slug: enriched.creator_profiles?.slug ?? null,
+                creator_primary_category_id: enriched.creator_profiles?.primary_category_id ?? null,
+                listing_category_id: enriched.listings?.category_id ?? null,
+                seller_profile_id: enriched.seller_profile_id ?? enriched.creator_profiles?.user_id ?? null,
                 last_message_body: null,
                 last_message_sender_id: null,
                 unread_count: 0,
@@ -367,7 +392,7 @@ export function MessagesClient({
                 is_pinned: false,
                 muted_until: null,
                 last_read_at: null,
-                role_in_conversation: enriched.buyer_profile_id === profile.id ? 'buyer' : 'seller',
+                role_in_conversation: enriched.buyer_id === profile.id ? 'buyer' : 'seller',
                 listing_title: enriched.listings?.title ?? null,
                 listing_image_url: enriched.listings?.cover_image_url ?? null,
                 // Custom order data from the separate query
@@ -741,8 +766,8 @@ export function MessagesClient({
 
   // ── FILTER TABS & SEARCH ──────────────────────────────────────────────────
   const activeConversationsFilteredByInbox = conversations.filter((c) => {
-    const isBuying = c.buyer_profile_id === profile.id;
-    const isSelling = c.seller_profile_id === profile.id;
+    const isBuying = c.buyer_id === profile.id;
+    const isSelling = c.buyer_id !== profile.id;
     
     // Tab Segmenting
     if (activeInbox === 'buying') return isBuying;
@@ -751,7 +776,7 @@ export function MessagesClient({
   });
 
   const finalFilteredConversations = activeConversationsFilteredByInbox.filter((c) => {
-    const isBuying = c.buyer_profile_id === profile.id;
+    const isBuying = c.buyer_id === profile.id;
     const displayName = isBuying 
       ? c.creator_display_name || 'Creator' 
       : c.buyer_full_name || c.buyer_username || 'Buyer';
@@ -775,11 +800,11 @@ export function MessagesClient({
 
   // Badge Counts for Tab Headers
   const unreadBuyingCount = conversations.filter(
-    (c) => c.buyer_profile_id === profile.id && c.unread_count > 0 && !c.is_archived
+    (c) => c.buyer_id === profile.id && c.unread_count > 0 && !c.is_archived
   ).length;
 
   const unreadSellingCount = conversations.filter(
-    (c) => c.seller_profile_id === profile.id && c.unread_count > 0 && !c.is_archived
+    (c) => c.buyer_id !== profile.id && c.unread_count > 0 && !c.is_archived
   ).length;
 
   // ── DATE SEPARATOR FORMATTER ──────────────────────────────────────────────
@@ -796,10 +821,10 @@ export function MessagesClient({
   };
 
   return (
-    <div className="grid grid-cols-12 fixed inset-x-0 bg-white overflow-hidden text-slate-900 antialiased" style={{ top: '3.5rem', bottom: 0 }}>
+    <div className="grid grid-cols-12 w-full h-[calc(100dvh-3.5rem)] bg-white overflow-hidden text-slate-900 antialiased relative">
       
       {/* ── PANEL 1: CONVERSATION LIST (LEFT PANEL) ─────────────────────────── */}
-      <div className={`col-span-12 md:col-span-4 flex flex-col border-r border-slate-200 bg-slate-50/30 relative z-10 ${activeId ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`col-span-12 md:col-span-4 h-full min-h-0 flex flex-col border-r border-slate-200 bg-slate-50/30 relative z-10 ${activeId ? 'hidden md:flex' : 'flex'}`}>
         
         {/* Inbox Switcher Tabs (Buyer vs Creator) */}
         {profile.role === 'creator' ? (
@@ -931,7 +956,7 @@ export function MessagesClient({
       </div>
 
       {/* ── PANEL 2: ACTIVE CHAT WINDOW (MIDDLE PANEL) ──────────────────────── */}
-      <div className={`col-span-12 md:col-span-8 lg:col-span-6 flex flex-col bg-slate-50 relative ${activeId ? 'flex' : 'hidden md:flex'}`}>
+      <div className={`col-span-12 md:col-span-8 h-full min-h-0 flex flex-col bg-slate-50 relative ${activeId ? 'flex' : 'hidden md:flex'}`}>
         {activeConvo ? (
           <>
             {/* Top Bar Header */}
@@ -948,7 +973,31 @@ export function MessagesClient({
                 {/* Peer user details */}
                 <div className="min-w-0">
                   <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <span className="truncate">{counterPartyName}</span>
+                    {isBuyingActive ? (
+                      activeConvo.creator_slug ? (
+                        <Link
+                          href={`/creators/${activeConvo.creator_slug}`}
+                          target="_blank"
+                          className="truncate hover:underline hover:text-indigo-600 transition"
+                        >
+                          {counterPartyName}
+                        </Link>
+                      ) : (
+                        <span className="truncate">{counterPartyName}</span>
+                      )
+                    ) : (
+                      activeConvo.buyer_username ? (
+                        <Link
+                          href={`/u/${activeConvo.buyer_username}`}
+                          target="_blank"
+                          className="truncate hover:underline hover:text-indigo-600 transition"
+                        >
+                          {counterPartyName}
+                        </Link>
+                      ) : (
+                        <span className="truncate">{counterPartyName}</span>
+                      )
+                    )}
                     <span className="px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[8px] font-bold text-slate-500 tracking-wide uppercase shrink-0">
                       {isBuyingActive ? 'Creator' : 'Client'}
                     </span>
@@ -976,16 +1025,6 @@ export function MessagesClient({
 
               {/* Chat action controls */}
               <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setShowRightDrawer(!showRightDrawer)}
-                  className={`p-2 text-slate-400 hover:text-slate-800 transition rounded-xl hover:bg-slate-100 lg:block border border-transparent ${
-                    showRightDrawer ? 'bg-indigo-50 border-indigo-200/50 text-indigo-600 shadow-sm' : ''
-                  }`}
-                  title="Toggle Context Panel"
-                >
-                  <Info className="h-4.5 w-4.5" />
-                </button>
-
                 <div className="relative">
                   <button
                     onClick={() => setShowMoreMenu(!showMoreMenu)}
@@ -1048,7 +1087,10 @@ export function MessagesClient({
             </div>
 
             {/* Middle Message Flow Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-3.5 bg-slate-50 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px]">
+            <div 
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto p-6 space-y-3.5 bg-slate-50 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px]"
+            >
               {messages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center text-center text-slate-500 space-y-2">
                   <span className="text-3xl">✍️</span>
@@ -1243,7 +1285,6 @@ export function MessagesClient({
                   });
                 })()
               )}
-              <div ref={messageEndRef} />
             </div>
 
             {/* Block Banner notice */}
@@ -1372,6 +1413,20 @@ export function MessagesClient({
                       <ImageIcon className="h-4.5 w-4.5" />
                     </button>
 
+                    {/* Conversation Context button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsContextPanelOpen(true)}
+                      className={`p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition shrink-0 ${
+                        activeConvo.listing_title
+                          ? 'text-indigo-600 border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50'
+                          : 'text-slate-455 hover:text-slate-900'
+                      }`}
+                      title="Conversation Context"
+                    >
+                      <LayoutList className="h-4.5 w-4.5" />
+                    </button>
+
                     {/* Emoji trigger */}
                     <button
                       type="button"
@@ -1446,109 +1501,7 @@ export function MessagesClient({
         )}
       </div>
 
-      {/* ── PANEL 3: CONTEXT PANEL (RIGHT DRAWER) ───────────────────────────── */}
-      {activeConvo && showRightDrawer && (
-        <div className="col-span-12 lg:col-span-3 border-l border-slate-200 bg-white p-6 space-y-5 hidden lg:block overflow-y-auto z-20">
-          
-          <div className="space-y-4">
-            <h4 className="text-[10px] font-black text-slate-450 uppercase tracking-widest">Conversation Context</h4>
-            
-            {/* Listing Reference Info Card */}
-            {activeConvo.listing_title ? (
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 space-y-3 shadow-md hover:border-slate-300 transition duration-300">
-                {activeConvo.listing_image_url && (
-                  <div className="relative w-full h-24 rounded-lg overflow-hidden bg-white border border-slate-200 shadow-inner">
-                    <Image src={activeConvo.listing_image_url} alt="Listing" fill unoptimized className="object-cover" />
-                  </div>
-                )}
-                <div>
-                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-600">Discussed Listing</span>
-                  <h5 className="text-xs font-black text-slate-800 mt-1 leading-snug">{activeConvo.listing_title}</h5>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-slate-200 border-dashed p-5 text-center text-slate-400 text-[10px] leading-relaxed bg-slate-50/50">
-                No specific listing linked to this conversation context.
-              </div>
-            )}
 
-            {/* Custom Proposal reference */}
-            {activeConvo.custom_order_status && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2.5 shadow-sm">
-                <span className="text-[9px] font-black uppercase tracking-wider text-emerald-650 block">Quote details</span>
-                <div className="flex items-center justify-between">
-                  <span className="text-base font-black text-emerald-600">
-                    {activeConvo.custom_order_price ? `₹${activeConvo.custom_order_price.toLocaleString('en-IN')}` : 'Quoted'}
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-slate-100 text-[8px] font-extrabold text-slate-500 uppercase tracking-wider border border-slate-200">
-                    {activeConvo.custom_order_status}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Connected Actions Panel */}
-          <div className="space-y-4 pt-4 border-t border-slate-150">
-            <h4 className="text-[10px] font-black text-slate-450 uppercase tracking-widest">Connected Actions</h4>
-            
-            {isBuyingActive ? (
-              /* Actions for Buyer */
-              <div className="grid gap-2">
-                {activeConvo.creator_slug && (
-                  <Link
-                    href={`/creators/${activeConvo.creator_slug}`}
-                    target="_blank"
-                    className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-[10px] shadow-sm font-bold transition duration-150 group"
-                  >
-                    <span>View Workspace Profile</span>
-                    <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-500 transition group-hover:translate-x-0.5" />
-                  </Link>
-                )}
-                {activeConvo.listing_id && (
-                  <Link
-                    href={`/listings/${activeConvo.listing_id}`}
-                    target="_blank"
-                    className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-[10px] shadow-sm font-bold transition duration-150 group"
-                  >
-                    <span>Inspect Listing specs</span>
-                    <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-emerald-500 transition group-hover:translate-x-0.5" />
-                  </Link>
-                )}
-                {/* Request Custom Order shortcut */}
-                <Link
-                  href={`/dashboard/buyer/custom-orders`}
-                  className="flex items-center justify-between p-3 rounded-xl border border-indigo-100 bg-indigo-50/20 hover:bg-indigo-50 text-[10px] shadow-sm font-bold transition duration-150 group"
-                >
-                  <span className="text-indigo-600">Request custom order</span>
-                  <Plus className="h-3.5 w-3.5 text-indigo-600 transition group-hover:scale-110" />
-                </Link>
-              </div>
-            ) : (
-              /* Actions for Seller */
-              <div className="grid gap-2">
-                {activeConvo.buyer_username && (
-                  <Link
-                    href={`/u/${activeConvo.buyer_username}`}
-                    target="_blank"
-                    className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-[10px] shadow-sm font-bold transition duration-150 group"
-                  >
-                    <span>View Buyer Profile</span>
-                    <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-500 transition group-hover:translate-x-0.5" />
-                  </Link>
-                )}
-                
-                {/* Generate custom offers button for inquiry DMs */}
-                {activeConvo.inquiry_id && activeConvo.custom_order_status !== 'completed' && (
-                  <div className="pt-2 border-t border-slate-100 mt-2">
-                    <CustomOfferForm inquiryId={activeConvo.inquiry_id} />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* ── REPORT MESSAGE MODAL DIALOG ──────────────────────── */}
       {reportingMessage && (
@@ -1620,13 +1573,206 @@ export function MessagesClient({
         </div>
       )}
 
+      {/* ── CONVERSATION CONTEXT FULL-SCREEN PANEL ──────────────── */}
+      {isContextPanelOpen && activeConvo && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-br from-slate-50 to-white animate-fadeIn">
+
+          {/* Panel Header */}
+          <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 shadow-sm shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                <LayoutList className="h-4 w-4 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900 tracking-tight">Conversation Context</h2>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {isBuyingActive
+                    ? `Chat with ${activeConvo.creator_display_name || 'Creator'}`
+                    : `Chat with ${activeConvo.buyer_full_name || activeConvo.buyer_username || 'Buyer'}`}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsContextPanelOpen(false)}
+              className="p-2 text-slate-400 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Panel Body — scrollable */}
+          <div className="flex-1 overflow-y-auto px-4 py-6 max-w-2xl w-full mx-auto space-y-6">
+
+            {/* Linked Listing Card */}
+            <section>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Linked Listing</p>
+              {activeConvo.listing_title ? (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  {activeConvo.listing_image_url && (
+                    <div className="relative w-full h-48 bg-slate-100">
+                      <Image
+                        src={activeConvo.listing_image_url}
+                        alt={activeConvo.listing_title}
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                      {activeConvo.custom_order_status && (
+                        <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider shadow">
+                          {activeConvo.custom_order_status}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="p-4 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-600 block mb-1">LINKED LISTING</span>
+                      <h3 className="text-sm font-black text-slate-900 leading-snug">{activeConvo.listing_title}</h3>
+                      {!activeConvo.listing_image_url && activeConvo.custom_order_status && (
+                        <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[9px] font-bold text-emerald-700 uppercase tracking-wider">
+                          {activeConvo.custom_order_status}
+                        </span>
+                      )}
+                    </div>
+                    {activeConvo.listing_id && (
+                      <Link
+                        href={`/listings/${activeConvo.listing_id}`}
+                        target="_blank"
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white text-[10px] font-bold text-slate-700 transition shadow-sm hover:shadow"
+                      >
+                        <span>View Listing</span>
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-slate-200 border-dashed p-8 text-center">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                    <Tag className="h-5 w-5 text-slate-400" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-500">No listing linked</p>
+                  <p className="text-[11px] text-slate-400 mt-1">This conversation has no specific listing attached.</p>
+                </div>
+              )}
+            </section>
+
+            {/* Custom Order Status */}
+            {activeConvo.custom_order_status && (
+              <section>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Custom Order Status</p>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                      <ShoppingBag className="h-4.5 w-4.5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-600 block">QUOTE DETAILS</span>
+                      {activeConvo.custom_order_price && (
+                        <span className="text-base font-black text-emerald-600">
+                          ₹{activeConvo.custom_order_price.toLocaleString('en-IN')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-[9px] font-extrabold text-slate-600 uppercase tracking-wider border border-slate-200">
+                    {activeConvo.custom_order_status}
+                  </span>
+                </div>
+              </section>
+            )}
+
+            {/* Actions */}
+            <section>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Actions</p>
+              <div className="space-y-2">
+                {isBuyingActive ? (
+                  <>
+                    {activeConvo.creator_slug && (
+                      <Link
+                        href={`/creators/${activeConvo.creator_slug}`}
+                        target="_blank"
+                        className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">
+                            <User className="h-4 w-4 text-slate-500" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 block">View Creator Profile</span>
+                            <span className="text-[10px] text-slate-400">/creators/{activeConvo.creator_slug}</span>
+                          </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-indigo-500 transition group-hover:translate-x-0.5" />
+                      </Link>
+                    )}
+                    <Link
+                      href="/dashboard/buyer/custom-orders"
+                      className="flex items-center justify-between p-4 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-violet-50 hover:from-indigo-100 hover:to-violet-100 shadow-sm transition group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center">
+                          <Plus className="h-4 w-4 text-indigo-600" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-indigo-700 block">Request Custom Order</span>
+                          <span className="text-[10px] text-indigo-400">Commission a personalised piece</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-indigo-400 group-hover:text-indigo-600 transition group-hover:translate-x-0.5" />
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    {activeConvo.buyer_username && (
+                      <Link
+                        href={`/u/${activeConvo.buyer_username}`}
+                        target="_blank"
+                        className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">
+                            <User className="h-4 w-4 text-slate-500" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 block">View Buyer Profile</span>
+                            <span className="text-[10px] text-slate-400">@{activeConvo.buyer_username}</span>
+                          </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-indigo-500 transition group-hover:translate-x-0.5" />
+                      </Link>
+                    )}
+                    {activeConvo.inquiry_id && activeConvo.custom_order_status !== 'completed' && (
+                      <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700 mb-3">Create Custom Offer</p>
+                        <CustomOfferForm inquiryId={activeConvo.inquiry_id} />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </section>
+          </div>
+
+          {/* Panel Footer */}
+          <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 flex justify-end">
+            <button
+              onClick={() => setIsContextPanelOpen(false)}
+              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-bold text-slate-700 transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 
   // ── RENDER CONVO ITEM HELPER ──────────────────────────────────────────────
   function renderConvoItem(c: ConversationWithDetails) {
     const isActive = c.id === activeId;
-    const isBuying = c.buyer_profile_id === profile.id;
+    const isBuying = c.buyer_id === profile.id;
     const titleName = isBuying 
       ? c.creator_display_name || 'Creator' 
       : c.buyer_full_name || c.buyer_username || 'Buyer';
@@ -1636,7 +1782,7 @@ export function MessagesClient({
       : '';
 
     const initials = titleName.charAt(0).toUpperCase();
-    const peerProfileId = isBuying ? c.seller_profile_id : c.buyer_profile_id;
+    const peerProfileId = isBuying ? c.seller_profile_id : c.buyer_id;
     
     const isPeerOnline = peerProfileId ? !!onlineUsers[peerProfileId] : false;
     const isPeerTyping = peerProfileId ? !!typingUsers[peerProfileId] : false;
