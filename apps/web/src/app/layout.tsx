@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 // @ts-ignore: CSS imports may not have type declarations in this environment
 import './globals.css';
+import { Analytics } from '@vercel/analytics/next';
 import { PostHogProvider } from '~/components/providers/posthog-provider';
 import { AppHeader } from '~/components/layout/app-header';
 import { AuthProvider } from '~/components/providers/auth-provider';
@@ -52,6 +53,7 @@ export default function RootLayout({
           </footer>
           </PostHogProvider>
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
