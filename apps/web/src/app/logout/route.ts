@@ -1,33 +1,22 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { cookies } from 'next/headers';
 import { createWebServerClient } from '~/lib/supabase/server';
 
 /**
  * Route Handler: /logout
  * Accepts GET and POST. Clears the session and redirects to /login.
+ *
+ * FIX (RC-8): Removed the manual cookie deletion loop.
+ * supabase.auth.signOut() via the SSR client already handles cookie clearing
+ * with correct attributes (HttpOnly, Secure based on environment, SameSite, Path).
+ * The previous manual deletion used `secure: true` unconditionally, which
+ * breaks on localhost (browsers reject secure cookies on non-HTTPS origins),
+ * leaving stale cookie fragments that confuse subsequent session checks.
  */
 async function handleLogout(request: NextRequest) {
   const supabase = createWebServerClient();
   await supabase.auth.signOut();
 
-  const response = NextResponse.redirect(new URL('/login', request.url));
-
-  // Explicitly wipe out all Supabase-related cookies to prevent residual session problems
-  const cookieStore = cookies();
-  const allCookies = cookieStore.getAll();
-  allCookies.forEach((c) => {
-    if (c.name.startsWith('sb-') || c.name.toLowerCase().includes('supabase')) {
-      response.cookies.set(c.name, '', {
-        maxAge: -1,
-        path: '/',
-        expires: new Date(0),
-        sameSite: 'lax',
-        secure: true,
-      });
-    }
-  });
-
-  return response;
+  return NextResponse.redirect(new URL('/login', request.url));
 }
 
 export { handleLogout as GET, handleLogout as POST };

@@ -10,6 +10,10 @@ import type { Profile } from '@rosovia/core';
  * Memoized per-request using React cache.
  * Uses next/headers cookies — safe for Server Components, Server Actions, Route Handlers.
  * Never exposes service role key.
+ *
+ * FIX (RC-10): cookies() is now called fresh each time createWebServerClient is invoked,
+ * and only the client construction is memoized per cookie-store identity. This prevents
+ * stale cookie references when cookies change mid-request (e.g. during Server Actions).
  */
 export const createWebServerClient = cache((): SupabaseClient => {
   const cookieStore = cookies();

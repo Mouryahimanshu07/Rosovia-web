@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@rosovia/integrations/browser';
+// FIX (RC-3): Use the singleton browser client instead of creating a new instance.
+import { getSupabaseBrowserClient } from '~/lib/supabase/client';
 import { createProfileForAuthUser } from '@rosovia/api/client';
 import { getCurrentUser, getDashboardRedirectPath } from '@rosovia/api/client';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@rosovia/ui';
@@ -18,7 +19,8 @@ export default function SelectRolePage() {
     setIsSubmitting(true);
     setServerError(null);
 
-    const supabase = createSupabaseBrowserClient();
+    // FIX (RC-3): Use singleton client so auth events propagate to AuthProvider.
+    const supabase = getSupabaseBrowserClient();
     const { user, error: userError } = await getCurrentUser(supabase);
 
     if (userError || !user) {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import type { Profile } from '@rosovia/core';
@@ -22,6 +22,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const supabase = getSupabaseBrowserClient();
+
+  // FIX (RC-11): Store router in a ref so the useEffect does not re-run
+  // on every navigation (useRouter() returns a new object each time in App Router).
+  const routerRef = useRef(router);
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
@@ -64,13 +71,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    // Load initial session and profile
+    // FIX (RC-1): Use getUser() instead of getSession().
+    // getUser() makes a network call to Supabase to verify the JWT,
+    // ensuring we always have the current, verified auth state.
+    // getSession() only reads from local storage/cookie cache and can be stale.
     const initAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (!isMounted) return;
 
-        const currentUser = session?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
@@ -107,13 +116,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (event === 'SIGNED_IN') {
-        router.refresh();
+        routerRef.current.refresh();
       } else if (event === 'SIGNED_OUT') {
-        router.refresh();
-        router.push('/login');
-      } else if (event === 'TOKEN_REFRESHED') {
-        router.refresh();
+        routerRef.current.refresh();
+        routerRef.current.push('/login');
+      } else if (event === 'USER_UPDATED') {
+        // Refresh server components when user metadata changes (e.g. profile update, password reset)
+        routerRef.current.refresh();
       }
+      // FIX (RC-2): Removed TOKEN_REFRESHED → router.refresh().
+      // Token refreshes happen silently every ~55 minutes. Triggering a full
+      // server component re-render on every refresh causes UI flickers, race
+      // conditions, and unnecessary load. The middleware handles token refresh
+      // transparently via its own getUser() call.
       
       if (isMounted) {
         setLoading(false);
@@ -124,15 +139,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [supabase, router, fetchProfile]);
+    // FIX (RC-11): Removed `router` from dependency array.
+    // router is accessed via routerRef inside callbacks, so the effect
+    // does not need to re-run when the router object reference changes.
+  }, [supabase, fetchProfile]);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
-    router.refresh();
-    router.push('/login');
-  }, [supabase, router]);
+    routerRef.current.refresh();
+    routerRef.current.push('/login');
+  }, [supabase]);
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, signOut, refresh }}>

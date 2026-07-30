@@ -6,10 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@rosovia/integrations/browser';
+// FIX (RC-3): Use the singleton browser client instead of creating a new instance.
+// createSupabaseBrowserClient() from the integrations package always creates a new
+// client, which bypasses the AuthProvider's singleton. Auth events fired by the new
+// client are invisible to the AuthProvider's onAuthStateChange listener, causing
+// stale auth state after login.
+import { getSupabaseBrowserClient } from '~/lib/supabase/client';
 import { loginSchema, type LoginInput } from '@rosovia/core';
 import { signInWithEmail } from '@rosovia/api/client';
-import { ensureUserProfile, getDashboardRedirectPath } from '@rosovia/api/client';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@rosovia/ui';
 
 function LoginFormContent() {
@@ -30,7 +34,8 @@ function LoginFormContent() {
     setServerError(null);
 
     try {
-      const supabase = createSupabaseBrowserClient();
+      // FIX (RC-3): Use singleton client so auth events propagate to AuthProvider.
+      const supabase = getSupabaseBrowserClient();
 
       const { error } = await signInWithEmail(supabase, {
         email: values.email,
@@ -42,29 +47,23 @@ function LoginFormContent() {
         return;
       }
 
-      const profile = await ensureUserProfile(supabase);
+      // FIX (RC-9): Removed ensureUserProfile() call.
+      // Profile creation is handled by the server-side auth callback route
+      // (/auth/callback) for OAuth/email-link flows, and by the middleware
+      // for password login. Calling it client-side creates a race condition
+      // where the client navigates before the server confirms the profile,
+      // causing a brief flash of /select-role.
 
-      if (!profile) {
-        router.push('/select-role');
-        return;
-      }
-
-      if (profile.status === 'suspended') {
-        await supabase.auth.signOut();
-        setServerError('Your account has been suspended. Please contact support.');
-        return;
-      }
-
-      if (profile.status === 'deleted') {
-        await supabase.auth.signOut();
-        setServerError('This account no longer exists.');
-        return;
-      }
-
+      // FIX (RC-4): Use router.refresh() instead of router.push().
+      // After signInWithPassword, the Supabase client writes the auth cookie.
+      // router.refresh() triggers a server-side re-render which passes through
+      // the middleware. The middleware sees the authenticated user on /login
+      // and redirects to the correct dashboard. This eliminates the race between
+      // router.push() and onAuthStateChange both trying to navigate simultaneously.
       if (redirectedFrom) {
         router.push(redirectedFrom);
       } else {
-        router.push(getDashboardRedirectPath(profile.role));
+        router.refresh();
       }
     } catch (error) {
       console.error('Login failed:', error);

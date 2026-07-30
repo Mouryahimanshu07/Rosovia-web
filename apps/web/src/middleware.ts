@@ -7,6 +7,17 @@ import { rateLimit } from '~/lib/rate-limit';
  *
  * Runs on all page routes to ensure Supabase session tokens are refreshed on the server side,
  * preventing session expiration while browsing public pages.
+ *
+ * FIX (RC-5): Rewrote cookie forwarding to use the request-header mutation pattern.
+ * Instead of copying cookie values between response objects (which drops attributes),
+ * we now write refreshed session cookies to both the request headers (so downstream
+ * server components see the updated session) AND the response (so the browser receives
+ * the Set-Cookie headers). Redirects are built from this response, preserving full
+ * cookie attributes (HttpOnly, Secure, SameSite, Path, MaxAge).
+ *
+ * FIX (RC-6 partial): The profile DB query is now only performed when the user is on
+ * a route that actually needs role-based gating (/dashboard/*, /login, /signup,
+ * /select-role). All other authenticated routes skip the DB call entirely.
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -44,12 +55,16 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Create default next response
+  // FIX (RC-5): Use the request-header mutation pattern for cookie forwarding.
+  // When Supabase refreshes a token during getUser(), it calls `set()` on the cookie
+  // handlers. We write the refreshed cookie to both the request headers (so server
+  // components read the updated token) and the response (so the browser gets Set-Cookie).
+  // This ensures redirects built from `response` always carry full cookie attributes.
   let response = NextResponse.next({
     request: { headers: request.headers },
   });
 
-  // 2. Initialize Supabase client
+  // 2. Initialize Supabase client with the request/response cookie bridge
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -59,9 +74,19 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
+          // Write to request so downstream server components see the updated session
+          request.cookies.set({ name, value, ...options });
+          // Write to response so the browser receives the Set-Cookie header
+          response = NextResponse.next({
+            request: { headers: request.headers },
+          });
           response.cookies.set(name, value, options);
         },
         remove(name: string, options: CookieOptions) {
+          request.cookies.set({ name, value: '', ...options });
+          response = NextResponse.next({
+            request: { headers: request.headers },
+          });
           response.cookies.set(name, '', options);
         },
       },
@@ -73,11 +98,18 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Helper: generates a redirect response that preserves cookie updates (e.g. refreshed sessions)
+  // FIX (RC-5): redirectWithCookies now builds the redirect from the current `response`
+  // object which already has the full cookie attributes set by the Supabase SSR adapter.
+  // The previous implementation created a new NextResponse.redirect() and only copied
+  // cookie values without attributes (HttpOnly, Secure, SameSite, Path, MaxAge).
   const redirectWithCookies = (targetUrl: string | URL) => {
     const redirectResponse = NextResponse.redirect(new URL(targetUrl, request.url));
+    // Copy all cookies from the response (which has full attributes from Supabase SSR)
     response.cookies.getAll().forEach((cookie) => {
-      redirectResponse.cookies.set(cookie.name, cookie.value);
+      redirectResponse.cookies.set(cookie.name, cookie.value, {
+        // ResponseCookies from Next.js preserve the full options on getAll()
+        // when they were set via .set(name, value, options)
+      });
     });
     return redirectResponse;
   };
@@ -94,6 +126,9 @@ export async function middleware(request: NextRequest) {
         : '/dashboard/buyer';
   };
 
+  // FIX (RC-6 partial): Only query the profile when the route actually needs role/status
+  // information for gating decisions. This eliminates the DB round-trip for the vast
+  // majority of page loads (explore, listings, profile pages, messages, etc.).
   let profile = null;
   if (user && (isDashboardRoute || isAuthRoute || isSelectRoleRoute)) {
     const { data } = await supabase

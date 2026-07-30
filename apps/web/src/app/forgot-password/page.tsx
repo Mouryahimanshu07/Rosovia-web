@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
-import { createSupabaseBrowserClient } from '@rosovia/integrations/browser';
+// FIX (RC-3): Use the singleton browser client instead of creating a new instance.
+import { getSupabaseBrowserClient } from '~/lib/supabase/client';
 import { forgotPasswordSchema, type ForgotPasswordInput } from '@rosovia/core';
 import { sendPasswordResetEmail } from '@rosovia/api/client';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@rosovia/ui';
@@ -21,7 +22,8 @@ export default function ForgotPasswordPage() {
   });
 
   const onSubmit = async (values: ForgotPasswordInput) => {
-    const supabase = createSupabaseBrowserClient();
+    // FIX (RC-3): Use singleton client so auth events propagate to AuthProvider.
+    const supabase = getSupabaseBrowserClient();
     const origin = window.location.origin;
 
     await sendPasswordResetEmail(

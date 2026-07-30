@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@rosovia/integrations/browser';
+// FIX (RC-3): Use the singleton browser client instead of creating a new instance.
+import { getSupabaseBrowserClient } from '~/lib/supabase/client';
 import { signupSchema, type SignupInput } from '@rosovia/core';
 import { signUpWithEmail } from '@rosovia/api/client';
 import { ensureUserProfile, getDashboardRedirectPath } from '@rosovia/api/client';
@@ -33,7 +34,8 @@ export default function SignupPage() {
   setServerError(null);
 
   try {
-    const supabase = createSupabaseBrowserClient();
+    // FIX (RC-3): Use singleton client so auth events propagate to AuthProvider.
+    const supabase = getSupabaseBrowserClient();
 
     const { data, error } = await signUpWithEmail(supabase, {
       email: values.email,

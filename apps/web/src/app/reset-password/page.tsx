@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@rosovia/integrations/browser';
+// FIX (RC-3): Use the singleton browser client instead of creating a new instance.
+import { getSupabaseBrowserClient } from '~/lib/supabase/client';
 import { resetPasswordSchema, type ResetPasswordInput } from '@rosovia/core';
 import { updatePassword } from '@rosovia/api/client';
 import { getCurrentProfile } from '@rosovia/api/client';
@@ -25,7 +26,8 @@ export default function ResetPasswordPage() {
 
   const onSubmit = async (values: ResetPasswordInput) => {
     setServerError(null);
-    const supabase = createSupabaseBrowserClient();
+    // FIX (RC-3): Use singleton client so auth events propagate to AuthProvider.
+    const supabase = getSupabaseBrowserClient();
 
     const { error } = await updatePassword(supabase, values.password);
 
