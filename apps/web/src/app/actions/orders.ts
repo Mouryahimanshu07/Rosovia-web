@@ -24,6 +24,7 @@ type ActionResult<T = undefined> =
   | { success: false; error: string };
 
 const revalidateOrderPaths = () => {
+  revalidatePath('/dashboard');
   revalidatePath('/dashboard/buyer/orders');
   revalidatePath('/dashboard/creator/orders');
 };

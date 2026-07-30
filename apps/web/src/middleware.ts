@@ -86,20 +86,31 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute = pathname === '/login' || pathname === '/signup';
   const isSelectRoleRoute = pathname === '/select-role';
 
+  const getRoleRedirectPath = (role: string) => {
+    return role === 'admin' 
+      ? '/dashboard/admin' 
+      : role === 'creator' 
+        ? '/dashboard/creator' 
+        : '/dashboard/buyer';
+  };
+
+  let profile = null;
+  if (user && (isDashboardRoute || isAuthRoute || isSelectRoleRoute)) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('role, status')
+      .eq('auth_user_id', user.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    profile = data;
+  }
+
   if (isDashboardRoute) {
     if (!user) {
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('redirected_from', pathname);
       return redirectWithCookies(loginUrl);
     }
-
-    // Query profile details from the database directly (handles role updates or suspensions instantly)
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, status')
-      .eq('auth_user_id', user.id)
-      .is('deleted_at', null)
-      .maybeSingle();
 
     if (!profile) {
       return redirectWithCookies('/select-role');
@@ -113,12 +124,7 @@ export async function middleware(request: NextRequest) {
 
     // Role-based URL Authorization Gate
     if (pathname === '/dashboard' || pathname === '/dashboard/') {
-      const redirectPath = profile.role === 'admin' 
-        ? '/dashboard/admin' 
-        : profile.role === 'creator' 
-          ? '/dashboard/creator' 
-          : '/dashboard/buyer';
-      return redirectWithCookies(redirectPath);
+      return redirectWithCookies(getRoleRedirectPath(profile.role));
     }
 
     if (pathname.startsWith('/dashboard/creator') && profile.role !== 'creator' && profile.role !== 'admin') {
@@ -136,23 +142,11 @@ export async function middleware(request: NextRequest) {
   } else if (isAuthRoute) {
     // Prevent authenticated users from accessing login/signup forms
     if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('auth_user_id', user.id)
-        .is('deleted_at', null)
-        .maybeSingle();
-
       if (!profile) {
         return redirectWithCookies('/select-role');
       }
 
-      const redirectPath = profile.role === 'admin' 
-        ? '/dashboard/admin' 
-        : profile.role === 'creator' 
-          ? '/dashboard/creator' 
-          : '/dashboard/buyer';
-      return redirectWithCookies(redirectPath);
+      return redirectWithCookies(getRoleRedirectPath(profile.role));
     }
   } else if (isSelectRoleRoute) {
     if (!user) {
@@ -160,20 +154,8 @@ export async function middleware(request: NextRequest) {
     }
 
     // If profile already exists, skip select-role and redirect to dashboard
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('auth_user_id', user.id)
-      .is('deleted_at', null)
-      .maybeSingle();
-
     if (profile) {
-      const redirectPath = profile.role === 'admin' 
-        ? '/dashboard/admin' 
-        : profile.role === 'creator' 
-          ? '/dashboard/creator' 
-          : '/dashboard/buyer';
-      return redirectWithCookies(redirectPath);
+      return redirectWithCookies(getRoleRedirectPath(profile.role));
     }
   }
 

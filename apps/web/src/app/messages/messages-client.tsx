@@ -251,16 +251,19 @@ export function MessagesClient({
   // ── REALTIME CONFIGURATION ────────────────────────────────────────────────
   React.useEffect(() => {
     // 1. Subscribe to Postgres Changes for ALL messages for current user (real-time message updates)
-    const messagesSubscription = supabase
-      .channel('realtime:user_messages')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-        },
-        async (payload: any) => {
+    let messagesSubscription: ReturnType<typeof supabase.channel> | null = null;
+    if (activeId) {
+      messagesSubscription = supabase
+        .channel(`realtime:messages:${activeId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+            filter: `conversation_id=eq.${activeId}`,
+          },
+          async (payload: any) => {
           const { eventType, new: newMsg, old: oldMsg } = payload;
 
           if (eventType === 'INSERT') {
@@ -278,20 +281,18 @@ export function MessagesClient({
               sender_role: senderProfile?.role ?? 'buyer',
             };
 
-            // If the message belongs to the currently active conversation
-            if (newMsg.conversation_id === activeId) {
-              setMessages((prev) => {
-                if (prev.some((m) => m.id === enrichedMsg.id)) return prev;
-                return [...prev, enrichedMsg];
-              });
-              scrollToBottom();
+            // Since the subscription is filtered by activeId, the message belongs to the currently active conversation
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === enrichedMsg.id)) return prev;
+              return [...prev, enrichedMsg];
+            });
+            scrollToBottom();
 
-              // Mark as read on server if we have the conversation open and sender is not me
-              if (newMsg.sender_profile_id !== profile.id && activeId) {
-                markConversationMessagesAsReadAction(activeId!).catch((err) => {
-                  console.error('Failed to mark incoming message as read:', err);
-                });
-              }
+            // Mark as read on server if we have the conversation open and sender is not me
+            if (newMsg.sender_profile_id !== profile.id && activeId) {
+              markConversationMessagesAsReadAction(activeId!).catch((err) => {
+                console.error('Failed to mark incoming message as read:', err);
+              });
             }
 
             // Also update the sidebar conversation list: unread count, last message body, last message timestamp
@@ -318,11 +319,9 @@ export function MessagesClient({
 
           if (eventType === 'UPDATE') {
             // Message read receipt update (e.g. read_at value modified)
-            if (newMsg.conversation_id === activeId) {
-              setMessages((prev) => {
-                return prev.map((m) => (m.id === newMsg.id ? { ...m, read_at: newMsg.read_at } : m));
-              });
-            }
+            setMessages((prev) => {
+              return prev.map((m) => (m.id === newMsg.id ? { ...m, read_at: newMsg.read_at } : m));
+            });
 
             // Update unread count and read_at states in conversation list
             setConversations((prevConvos) => {
@@ -340,6 +339,7 @@ export function MessagesClient({
         }
       )
       .subscribe();
+    }
 
     // 2. Subscribe to Postgres Changes for conversations table (pin/archive changes)
     const conversationsSubscription = supabase
@@ -353,6 +353,24 @@ export function MessagesClient({
         },
         async (payload: any) => {
           const { eventType, new: newConvo } = payload;
+          if (eventType === 'UPDATE') {
+            // Conversation metadata updated (e.g. last_message_at changed from a new message)
+            setConversations((prev) =>
+              prev.map((c) => {
+                if (c.id === newConvo.id) {
+                  return {
+                    ...c,
+                    last_message_at: newConvo.last_message_at,
+                  };
+                }
+                return c;
+              }).sort((a, b) => {
+                const timeA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+                const timeB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+                return timeB - timeA;
+              })
+            );
+          }
           if (eventType === 'INSERT') {
             // New conversation started. Fetch details and append to sidebar list.
             // FIX: Do NOT embed custom_orders in this SELECT — migrations 043 and 065
@@ -362,7 +380,7 @@ export function MessagesClient({
             // using the canonical custom_orders.conversation_id FK instead.
             const { data: enriched } = await supabase
               .from('conversations')
-              .select('*, profiles!conversations_buyer_id_fkey ( full_name, username ), creator_profiles ( display_name, slug, user_id, primary_category_id ), listings ( title, cover_image_url, category_id )')
+              .select('*, profiles!conversations_buyer_id_fkey ( full_name, username ), creator_profiles ( display_name, slug, user_id, primary_category_id ), listings ( title, category_id )')
               .eq('id', newConvo.id)
               .single();
 
@@ -394,7 +412,7 @@ export function MessagesClient({
                 last_read_at: null,
                 role_in_conversation: enriched.buyer_id === profile.id ? 'buyer' : 'seller',
                 listing_title: enriched.listings?.title ?? null,
-                listing_image_url: enriched.listings?.cover_image_url ?? null,
+                listing_image_url: null,
                 // Custom order data from the separate query
                 custom_order_status: customOrder?.status ?? null,
                 custom_order_price: customOrder?.creator_quote_amount ?? null,
@@ -423,7 +441,7 @@ export function MessagesClient({
       .subscribe();
 
     return () => {
-      supabase.removeChannel(messagesSubscription);
+      if (messagesSubscription) supabase.removeChannel(messagesSubscription);
       supabase.removeChannel(conversationsSubscription);
       supabase.removeChannel(typingChannel);
     };

@@ -10,6 +10,7 @@ import { createWebServerClient, getServerProfile } from '~/lib/supabase/server';
 import { getDashboardRedirectPath, getUnreadCountForCurrentUser, getUnreadMessageCountForCurrentUser } from '@rosovia/api';
 import { SidebarNav } from './sidebar-nav';
 import { DashboardSearchInput } from '~/components/dashboard/DashboardSearchInput';
+import { RealtimeBadge } from '~/components/dashboard/realtime-badge';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,9 +112,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               title="Notifications"
             >
               <Bell className="h-4.5 w-4.5" />
-              {unreadNotificationsCount > 0 && (
-                <span className="absolute top-1 right-1 flex h-2 w-2 rounded-full bg-red-500" />
-              )}
+              <RealtimeBadge initialCount={unreadNotificationsCount} profileId={profile.id} type="notifications" />
             </Link>
 
             {/* Messages Shortcut */}
@@ -123,11 +122,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               title="Messages"
             >
               <MessageSquare className="h-4.5 w-4.5" />
-              {unreadMessagesCount > 0 && (
-                <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[8px] font-bold text-white">
-                  {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
-                </span>
-              )}
+              <RealtimeBadge initialCount={unreadMessagesCount} profileId={profile.id} type="messages" />
             </Link>
 
             {/* Divider */}

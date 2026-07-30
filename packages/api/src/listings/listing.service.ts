@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ListingCreateInput, ListingUpdateInput, Listing, ListingWithDetails } from '@rosovia/core';
 import { generateSlug } from '@rosovia/core';
+import { cacheHelpers, getDatabaseClients } from '@rosovia/integrations';
 import { getProfileByAuthUserId } from '../profiles/profile.repository';
 import { getCreatorProfileByUserId } from '../creator-profiles/creator-profile.repository';
 import {
@@ -216,8 +217,6 @@ export async function restoreCurrentCreatorListingToDraft(
   await cacheHelpers.del(`listing:detail:${updatedListing.slug}`);
   return updatedListing;
 }
-
-import { cacheHelpers, getDatabaseClients } from '@rosovia/integrations';
 
 export async function getPublicListingBySlug(
   supabase: SupabaseClient,
